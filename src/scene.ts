@@ -1,20 +1,21 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {decorate,disposeEnvironment,loadEnvironment,type Environment} from './environment';
 import { LENGTH, LEG, stops, ground, road, start, advance, vehicles, type Vehicle } from './driving';
 
 export function mount(host: HTMLElement, report: (speed: number, progress: number) => void, options: {paused:boolean; shadows:boolean; vehicle:Vehicle}) {
-  const scene = new T.Scene(); scene.fog = new T.FogExp2('#d8c8ab', .00245);
+  const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
   const camera = new T.PerspectiveCamera(52,1,.15,850);
   scene.add(new T.HemisphereLight('#dcecff','#b4906c',1.65));
-  const sun = new T.DirectionalLight('#ffe0b0',2.65); sun.shadow.mapSize.set(1024,1024); Object.assign(sun.shadow.camera,{left:-23,right:23,top:23,bottom:-23,far:110}); sun.shadow.normalBias=.035; scene.add(sun,sun.target);
+  const sun = new T.DirectionalLight('#ffebcf',2.5); sun.shadow.mapSize.set(1024,1024); Object.assign(sun.shadow.camera,{left:-25,right:25,top:25,bottom:-25,far:110}); sun.shadow.normalBias=.045; scene.add(sun,sun.target);
   const sky = new T.Mesh(new T.SphereGeometry(780,24,12),new T.ShaderMaterial({
     side:T.BackSide,depthWrite:false,
     vertexShader:'varying vec3 direction; void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:`varying vec3 direction; void main(){
       vec3 ray=normalize(direction);
       float height=max(ray.y,0.);
-      vec3 color=mix(vec3(.73,.62,.45),vec3(.19,.41,.61),smoothstep(0.,.73,height));
+      vec3 color=mix(vec3(.69,.72,.71),vec3(.24,.49,.72),smoothstep(0.,.45,height));
       float glow=pow(max(dot(ray,normalize(vec3(-.57,.43,-.70))),0.),12.);
       gl_FragColor=vec4(color+vec3(.32,.19,.08)*glow,1.);
       #include <tonemapping_fragment>
@@ -23,6 +24,12 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
   }));scene.add(sky);
   function mesh(geometry:T.BufferGeometry,color:string,parent:T.Object3D=scene) {const item=new T.Mesh(geometry,new T.MeshStandardMaterial({color,roughness:.91})); item.receiveShadow=true; parent.add(item); return item;}
   const span=320, chunks=new Map<number,T.Group>();
+  let environment:Environment|undefined;
+  loadEnvironment().then(assets=>{
+    if(disposed){disposeEnvironment(assets);return;}
+    environment=assets;
+    for(const [key,group] of chunks)decorate(group,assets,key*span,(key+1)*span);
+  }).catch(error=>console.error('Could not initialize Thar scenery',error));
   function surface(kind:'sand'|'asphalt'){
     const size=128,data=new Uint8Array(size*size*4);
     let seed=kind==='sand'?13:67;
@@ -30,7 +37,7 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
       seed=(Math.imul(seed,1664525)+1013904223)>>>0;
       const grain=seed/4294967296-.5;
       const waves=Math.sin(row*Math.PI/8+1.15*Math.sin(column*Math.PI/32));
-      const shade=kind==='sand'?211+grain*39+waves*10:174+grain*58+waves*4;
+      const shade=kind==='sand'?216+grain*43+waves*3:174+grain*52+waves*2;
       const index=(row*size+column)*4;
       data.set([shade,shade,shade,255],index);
     }
@@ -48,13 +55,26 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
     item.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
     (item.material as T.MeshStandardMaterial).map=texture;
   }
-  const dispose=(root:T.Object3D)=>root.traverse(item=>{if(item instanceof T.InstancedMesh)item.dispose();if(item instanceof T.Mesh||item instanceof T.Points){item.geometry.dispose();for(const material of Array.isArray(item.material)?item.material:[item.material]){if(material.map&&material.map!==sand&&material.map!==asphalt)material.map.dispose();material.dispose();}}});
+  const dispose=(root:T.Object3D)=>root.traverse(item=>{if(item instanceof T.InstancedMesh){item.dispose();if(item.userData.sharedEnvironment)return;}if(item instanceof T.Mesh||item instanceof T.Points){item.geometry.dispose();for(const material of Array.isArray(item.material)?item.material:[item.material]){if(material.map&&material.map!==sand&&material.map!==asphalt)material.map.dispose();material.dispose();}}});
   function chunk(segment:number){
     const group=new T.Group(),from=segment*span,to=from+span;
     const terrain=new T.PlaneGeometry(440,span,110,80);terrain.rotateX(-Math.PI/2);terrain.translate(0,0,-from-span/2);
     const points=terrain.attributes.position;
-    for(let index=0;index<points.count;index++)points.setY(index,ground(points.getX(index),-points.getZ(index))-.15);
-    terrain.computeVertexNormals();textureSurface(mesh(terrain,'#c5955e',group),sand,5.8);
+    const tint=new Float32Array(points.count*3);
+    const sandTone=new T.Color('#cbb18a'),earthTone=new T.Color('#a98d68'),greenTone=new T.Color('#999373'),color=new T.Color();
+    for(let index=0;index<points.count;index++){
+      const x=points.getX(index),distance=-points.getZ(index);
+      points.setY(index,ground(x,distance)-.12);
+      const mottling=.5+.26*Math.sin(x*.12+distance*.058)+.22*Math.cos(x*.29-distance*.14);
+      color.copy(sandTone).lerp(earthTone,mottling).lerp(greenTone,Math.max(0,Math.sin(x*.056-distance*.031)-.48)*.7);
+      color.toArray(tint,index*3);
+    }
+    terrain.setAttribute('color',new T.BufferAttribute(tint,3));
+    terrain.computeVertexNormals();
+    const soil=mesh(terrain,'#ffffff',group);
+    soil.material.vertexColors=true;
+    textureSurface(soil,sand,5.8);
+    soil.material.bumpMap=sand;soil.material.bumpScale=.12;
     function strip(offset:number,width:number,color:string,ranges:number[][]){
       const vertices:number[]=[],indices:number[]=[];
       for(const [begin,end] of ranges){
@@ -75,30 +95,10 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
     }
     if(from>=0&&from<LENGTH){
       strip(-5.08,1.4,'#ac875f',[[from,to]]);strip(5.08,1.4,'#ac875f',[[from,to]]);
-      strip(0,9,'#525054',[[from,to]]);strip(-4,.10,'#ded5b9',[[from,to]]);strip(4,.10,'#ded5b9',[[from,to]]);
+      strip(0,9,'#5f5b56',[[from,to]]);strip(-4,.10,'#ddbc6c',[[from,to]]);strip(4,.10,'#ddbc6c',[[from,to]]);
       strip(0,.13,'#eadbb5',Array.from({length:span/16},(_,index)=>[from+index*16+4,from+index*16+10]));
     }
-    let seed=7642+segment*173;const random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
-    const foliage=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({color:'#b3b291',flatShading:true}),216);
-    const trunks=new T.InstancedMesh(new T.CylinderGeometry(.055,.12,1,6),new T.MeshStandardMaterial({color:'#675041'}),12);
-    const transform=new T.Object3D(),color=new T.Color();
-    for(let plant=0;plant<72;plant++){
-      const distance=from+random()*span,lateral=road(distance)+(random()<.5?-1:1)*(7+random()**1.35*148);
-      const elevation=ground(lateral,distance),tree=plant<12,size=tree?1.25+random()*1.2:.26+random()*.75;
-      if(tree){
-        transform.position.set(lateral,elevation+size*.64,-distance);transform.scale.setScalar(size*1.34);
-        transform.rotation.y=0;transform.updateMatrix();trunks.setMatrixAt(plant,transform.matrix);
-      }
-      for(let lobe=0;lobe<3;lobe++){
-        const angle=lobe*2.09+random(),radius=size*(.52+random()*.25);
-        transform.position.set(lateral+Math.cos(angle)*radius,elevation+size*(tree?1.32+random()*.24:.32+random()*.19),-distance+Math.sin(angle)*radius);
-        transform.scale.set(size*(.74+random()*.28),size*(tree?.37:.46),size*(.62+random()*.32));
-        transform.rotation.y=angle;transform.updateMatrix();
-        foliage.setMatrixAt(plant*3+lobe,transform.matrix);
-        foliage.setColorAt(plant*3+lobe,color.setHSL(.16+random()*.09,.24+random()*.18,.35+random()*.19));
-      }
-    }
-    group.add(foliage,trunks);
+    if(environment)decorate(group,environment,from,to);
     stops.forEach((name,index)=>{
       const distance=index*LEG;
       if(distance<from||distance>=to)return;
@@ -111,16 +111,6 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
         const sign=new T.Mesh(new T.BoxGeometry(3.8,.95,.06),new T.MeshBasicMaterial({map:texture}));sign.position.set(lateral,elevation+2.4,-distance);group.add(sign);
       }
       mesh(new T.BoxGeometry(.13,2,.13),'#6b6456',group).position.set(lateral,elevation+1,-distance);
-      for(let house=0;house<5;house++){
-        const z=distance+4+house*9,x=road(z)+12+random()*12,y=ground(x,z);
-        const radius=1.75+random()*.65, height=1.85;
-        mesh(new T.CylinderGeometry(radius,radius*1.03,height+.9,18),'#b68055',group).position.set(x,y+(height-.9)*.5,-z);
-        mesh(new T.CylinderGeometry(.18,radius*1.16,1.55,20),'#816443',group).position.set(x,y+height+.73,-z);
-        mesh(new T.CylinderGeometry(radius*1.15,radius*1.16,.09,20),'#644c36',group).position.set(x,y+height-.03,-z);
-        mesh(new T.BoxGeometry(.76,1.41,.08),'#513c2d',group).position.set(x,y+.71,-z+radius*.99);
-        mesh(new T.BoxGeometry(.84,.11,.16),'#e3c39a',group).position.set(x,y+1.46,-z+radius*.98);
-        if(house<3)mesh(new T.BoxGeometry(4.5,.65,.33),'#a77450',group).position.set(x+1.1,y+.3,-z+radius+1.1);
-      }
     });
     scene.add(group);chunks.set(segment,group);
   }
@@ -219,5 +209,5 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
     dust.visible=Math.abs(car.speed)>3; if(dust.visible){for(let index=0;index<30;index++){const phase=(now*.001+index/30)%1, trail=1.5+phase*6;particles[index*3]=car.lateral-Math.sin(car.heading)*trail+Math.sin(index*51)*phase;particles[index*3+1]=y+.2+phase*.7;particles[index*3+2]=-car.position+Math.cos(car.heading)*trail;}dust.geometry.attributes.position.needsUpdate=true;dust.frustumCulled=false;}
     renderer.render(scene,camera); if(now-lastReport>100){report(Math.abs(car.speed)*3.6,car.position/LENGTH);lastReport=now;}handle=requestAnimationFrame(frame);}
   handle=requestAnimationFrame(frame);
-  return ()=>{disposed=true;cancelAnimationFrame(handle);observer.disconnect();listeners.abort();dispose(scene);sand.dispose();asphalt.dispose();sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
+  return ()=>{disposed=true;cancelAnimationFrame(handle);observer.disconnect();listeners.abort();dispose(scene);if(environment)disposeEnvironment(environment);sand.dispose();asphalt.dispose();sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
 }
