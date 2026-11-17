@@ -12,11 +12,15 @@ export type Vehicle = keyof typeof vehicles;
 export const road = (distance: number) => 34 * Math.sin(distance / 115) + 19 * Math.sin(distance / 57);
 export const grade = (distance: number) => 2.4 * Math.sin(distance / 76) + 5 * Math.sin(distance / 223);
 export function ground(lateral: number, distance: number) {
-  const blend = Math.min(1, Math.max(0, (Math.abs(lateral-road(distance))-4.4)/24));
-  return grade(distance) + blend * blend * (3 + 2.8 * Math.sin(distance/39+lateral/15) + 2.2 * Math.cos(lateral/23-distance/63));
+  const blend = Math.min(1, Math.max(0, (Math.abs(lateral-road(distance))-7)/34));
+  const dune = .5 + .5 * Math.sin(distance / 94 + lateral / 34 + .6 * Math.cos(distance / 59));
+  return grade(distance) + blend * blend * (1.1 + 10 * dune ** 2 + 2.2 * Math.cos(lateral/23-distance/63));
 }
 export type Drive = { position: number; lateral: number; heading: number; speed: number };
-export const start = (): Drive => ({position:12,lateral:road(12),heading:Math.atan((road(13)-road(11))/2),speed:0});
+export const start = (): Drive => {
+  const position = 18;
+  return {position,lateral:road(position),heading:Math.atan((34/115)*Math.cos(position/115)+(19/57)*Math.cos(position/57)),speed:0};
+};
 export function advance(car: Drive, dt: number, input: {throttle:boolean; reverse:boolean; steer:number; brake:boolean}, vehicle:Vehicle='jeep') {
   const profile=vehicles[vehicle];
   const loose = Math.abs(car.lateral-road(car.position)) > 4;
