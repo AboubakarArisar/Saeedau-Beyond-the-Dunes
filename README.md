@@ -6,6 +6,8 @@ A browser driving game set in Pakistan’s Thar Desert. Drive from Umerkot throu
 
 Requires Node.js 22 and a browser with WebGL 2. Install with `npm ci`, start with `npm run dev`, and open the address Vite displays. Use Garage to try the Long Chassis jeep, Kekro or Unique 70 motorcycle.
 
+If an older Windows checkout reports that Application Control blocked Rollup, run `npm ci` again to install the current lockfile. Vite uses Rollup’s official WebAssembly package instead of the native Windows add-on; no Windows security settings need to change.
+
 - WASD or arrow keys: accelerate, reverse and steer
 - Space: handbrake; R: restart the route
 - Drag and scroll: orbit and zoom; Escape: pause
