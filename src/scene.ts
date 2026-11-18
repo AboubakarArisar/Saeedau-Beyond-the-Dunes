@@ -12,7 +12,7 @@ import {checkpoint,discover,newRun,places,tick,type Mode,type Run} from './run';
 export function mount(host: HTMLElement, report: (speed:number, position:number, progress:number, motion:Motion, run:Run) => void, options: {
   paused:boolean;shadows:boolean;vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
   touch:Map<number,DriveAction>;reset:number;recenter:boolean;season:Season;mode:Mode;preview:boolean;finish:boolean;
-  previewAngle:number;previewZoom:number;
+  garage:boolean;previewFrame:{current:HTMLDivElement|null};previewAngle:number;previewZoom:number;
 }) {
   const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
@@ -20,9 +20,27 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   const titleCamera=new T.PerspectiveCamera(43,1,.15,850);
   const previewCamera=new T.PerspectiveCamera(47,1,.15,850);
   const displayCar=start();
-  const previewDistance=152;
+  const previewDistance=172;
   const previewCar={position:previewDistance,lateral:road(previewDistance),
     heading:Math.atan2(road(previewDistance+1)-road(previewDistance-1),2)};
+  const previewProfiles={
+    kekro:{radius:2.54,target:1.13,angle:2.35},
+    jeep:{radius:2.27,target:1.02,angle:2.22},
+    unique:{radius:1.23,target:.65,angle:2.08},
+  };
+  const previewAngles={journey:2.17,race:2.48,challenge:1.94,explorer:1.66};
+  const contact=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShaderMaterial({
+    transparent:true,depthWrite:false,
+    vertexShader:'varying vec2 tex; void main(){tex=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+    fragmentShader:'varying vec2 tex; void main(){float fade=1.-smoothstep(.06,.5,length(tex-.5));gl_FragColor=vec4(.06,.043,.027,fade*.39);}',
+  }));
+  contact.rotation.order='YXZ';
+  contact.rotation.x=-Math.PI/2;
+  contact.visible=false;
+  scene.add(contact);
+  const showroomFill=new T.PointLight('#ffe1bf',21,13);
+  showroomFill.visible=false;
+  scene.add(showroomFill);
   const ambient=new T.HemisphereLight('#dcecff','#b4906c',1.65);
   scene.add(ambient);
   const sun = new T.DirectionalLight('#ffebcf',2.5); sun.shadow.mapSize.set(1024,1024); Object.assign(sun.shadow.camera,{left:-25,right:25,top:25,bottom:-25,far:110}); sun.shadow.normalBias=.045; scene.add(sun,sun.target);
@@ -341,7 +359,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   };
   const blur=()=>{keys.clear();release();};
   const pointer=(event:PointerEvent)=>{
-    if((options.paused&&!options.preview)||drag!==undefined||event.button!==0)return;
+    if(options.paused||drag!==undefined||event.button!==0)return;
     if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
     drag=event.pointerId;renderer.domElement.setPointerCapture(event.pointerId);
   };
@@ -349,7 +367,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     if(event.pointerId===drag){orbit-=event.movementX*.007;orbit=Math.atan2(Math.sin(orbit),Math.cos(orbit));}
   };
   const wheel=(event:WheelEvent)=>{
-    if(options.paused&&!options.preview)return;
+    if(options.paused)return;
     event.preventDefault();zoom=T.MathUtils.clamp(zoom+event.deltaY*.009,-4,7);
   };
   const listeners=new AbortController(),signal=listeners.signal;
@@ -361,19 +379,19 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   renderer.domElement.addEventListener('pointermove',move,{signal});
   renderer.domElement.addEventListener('wheel',wheel,{signal,passive:false});
   let pixelRatio=options.mobile?Math.min(1,devicePixelRatio):Math.min(1.5,devicePixelRatio);
-  let frameAverage=16,qualityCheck=performance.now();
+  let frameAverage=16,qualityCheck=performance.now(),previewWidth=1,previewHeight=1;
   const resize=()=>{
     const width=host.clientWidth,height=host.clientHeight;
     if(!width||!height)return;
     renderer.setPixelRatio(pixelRatio);renderer.setSize(width,height);
     camera.aspect=titleCamera.aspect=previewCamera.aspect=width/height;camera.updateProjectionMatrix();
     titleCamera.setViewOffset(width,height,width<height?0:-width*.235,width<height?height*.17:0,width,height);
-    previewCamera.setViewOffset(width,height,width<height?0:-width*.23,width<height?height*.33:0,width,height);
+    previewWidth=width;previewHeight=height;
   };
   const observer=new ResizeObserver(resize);observer.observe(host);resize();
   const target=new T.Vector3();let first=true,previousTitle=options.title,reset=options.reset;
   let activeVehicle=options.vehicle;
-  let run=newRun(options.mode),previousPreview=false;
+  let run=newRun(options.mode),previousPreview=false,previousGarage=false,showroomAngle=0,showroomDistance=0;
   let previousPaused=options.paused;
   let steering=0,lastImpact=-Infinity;
   renderer.shadowMap.autoUpdate=false;
@@ -415,8 +433,11 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     }
     if(previousTitle!==options.title){previousTitle=options.title;first=true;}
     if(reset!==options.reset){reset=options.reset;car=start();run=newRun(options.mode);steering=0;lastImpact=-Infinity;first=true;orbit=zoom=0;release();}
-    if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;first=true;orbit=zoom=0;release();}
-    if(previousPreview!==options.preview){previousPreview=options.preview;first=true;orbit=zoom=0;release();}
+    if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;if(!options.preview)first=true;orbit=zoom=0;release();}
+    if(previousPreview!==options.preview||previousGarage!==options.garage){
+      previousPreview=options.preview;previousGarage=options.garage;first=true;orbit=zoom=0;release();
+      options.previewAngle=options.previewZoom=0;
+    }
     const resumed=previousPaused&&!options.paused;
     if(previousPaused!==options.paused){
       previousPaused=options.paused;
@@ -474,10 +495,28 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       titleCamera.position.set(shown.lateral-Math.sin(angle)*distance,y+2.0+drift,-shown.position+Math.cos(angle)*distance);
       titleCamera.lookAt(shown.lateral,y+.98,-shown.position);
     }else if(options.preview){
-      const angle=shown.heading+1.02+orbit+options.previewAngle+(options.reducedMotion?0:Math.sin(now*.00035)*.12);
-      const distance=Math.max(3.1,chaseProfiles[activeVehicle].distance+zoom+options.previewZoom);
-      previewCamera.position.set(shown.lateral-Math.sin(angle)*distance,y+distance*.33,-shown.position+Math.cos(angle)*distance);
-      previewCamera.lookAt(shown.lateral,y+1,-shown.position);
+      const area=options.previewFrame.current?.getBoundingClientRect();
+      const width=previewWidth,height=previewHeight;
+      const offsetX=area?(width-area.width)/2-area.left:0;
+      const offsetY=area?(height-area.height)/2-area.top:0;
+      if(previewCamera.view?.fullWidth!==width||previewCamera.view.fullHeight!==height||
+        previewCamera.view.offsetX!==offsetX||previewCamera.view.offsetY!==offsetY){
+        previewCamera.setViewOffset(width,height,offsetX,offsetY,width,height);
+      }
+      const profile=previewProfiles[activeVehicle];
+      const compact=width<height||height<=500;
+      const visibleRadius=Math.max(1,Math.min((area?.width??width)*(compact?.40:.48),(area?.height??height)*(compact?.44:.52)));
+      const viewSlope=2*Math.tan(T.MathUtils.degToRad(previewCamera.fov/2))*visibleRadius/height;
+      const fit=profile.radius*Math.hypot(1,1/viewSlope);
+      const angle=shown.heading+(options.garage?profile.angle+options.previewAngle:previewAngles[options.mode]);
+      const distance=fit*(options.garage?1.16-options.previewZoom*.29:1.06);
+      showroomAngle=first||options.reducedMotion?angle:dampHeading(showroomAngle,angle,dt*2);
+      showroomDistance=first||options.reducedMotion?distance:T.MathUtils.damp(showroomDistance,distance,12,dt);
+      const framed=Math.max(fit,showroomDistance);
+      previewCamera.position.set(shown.lateral-Math.sin(showroomAngle)*framed,y+profile.target+framed*.23,
+        -shown.position+Math.cos(showroomAngle)*framed);
+      previewCamera.lookAt(shown.lateral,y+profile.target,-shown.position);
+      first=false;
     }else if(run.outcome==='finished'&&run.leg===stops.length-1){
       const distance=LENGTH-33,x=road(distance)-2.7;
       camera.position.set(x,ground(x,distance)+3.2,-distance);
@@ -503,6 +542,14 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       camera.lookAt(target);first=false;
     }
     const view=parked?titleCamera:options.preview?previewCamera:camera;
+    contact.visible=showroomFill.visible=options.preview;
+    if(options.preview){
+      const profile=vehicles[activeVehicle];
+      contact.position.set(shown.lateral,y+.09,-shown.position);
+      contact.rotation.y=-shown.heading;
+      contact.scale.set(profile.width*3.2,profile.length*2.7,1);
+      showroomFill.position.set(shown.lateral-3,y+4.4,-shown.position-3.3);
+    }
     sky.position.copy(view.position);
     sun.position.set(shown.lateral-(parked?37:27),y+(parked?26:34),-shown.position-19);
     sun.color.set(season.sun);

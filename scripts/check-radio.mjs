@@ -24,7 +24,7 @@ try {
   const shot=name=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts',name)});
   const media=()=>page.locator('audio').evaluate(audio=>({paused:audio.paused,time:audio.currentTime,volume:audio.volume}));
   await page.goto('http://127.0.0.1:'+port);
-  await button('Garage').click();await button('Expand').click();
+  await button('start journey').click();await button('Start Free Journey').click();await button('Expand').click();
   const input=page.locator('input[type=file]');
   await input.setInputFiles([{name:'Dune-one.wav',mimeType:'audio/wav',buffer:wave(220)},{name:'Dune-two.wav',mimeType:'audio/wav',buffer:wave(330)}]);
   expect((await media()).paused).toBe(true);
@@ -62,6 +62,10 @@ try {
   await expect(page.locator('.radio-embed iframe')).toHaveCount(0);
   await expect(button('Dune-two')).toHaveAttribute('aria-current','true');
   await button('Play music').click();
+  await button('Pause').click();
+  page.once('dialog',dialog=>dialog.accept());await button('Main menu').click();
+  await button('Garage').click();await expect(page.locator('[data-radio]')).toHaveCount(0);
+  await expect.poll(async()=>(await media()).paused).toBe(false);
   await button('Back').click();await button('start journey').click();
   await button('Start Free Journey').click();
   await expect(button('Pause music')).toBeVisible();
@@ -73,7 +77,7 @@ try {
   await expect(button('Collapse')).toBeVisible();
   await button('Remove Dune-one').click();await expect(button('Dune-one')).toHaveCount(0);
   await input.setInputFiles({name:'not-a-song.txt',mimeType:'text/plain',buffer:Buffer.from('invalid')});
-  await expect(page.getByRole('status')).toContainText('Unrecognized');
+  await expect(page.getByRole('complementary',{name:'Thar Radio'}).getByRole('status')).toContainText('Unrecognized');
   await button('Clear playlist').click();
   await expect.poll(async()=>(await media()).paused).toBe(true);
   await button('Pause').click();await button('Settings').click();

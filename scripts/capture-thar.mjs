@@ -37,10 +37,11 @@ try {
   for(const [index,vehicle] of ['Long Chassis jeep','Kekro','Unique 70 motorcycle'].entries()){
     if(index){
       await page.getByRole('button',{name:'Pause'}).click();
-      await page.getByRole('button',{name:'Garage'}).click();
-      await page.getByRole('button',{name:vehicle}).click();
-      await page.getByRole('button',{name:'Back'}).click();
-      await page.getByRole('button',{name:'Play'}).click();
+      page.once('dialog',dialog=>dialog.accept());
+      await page.getByRole('button',{name:'Main menu',exact:true}).click();
+      await page.getByRole('button',{name:'start journey',exact:true}).click();
+      await page.getByRole('button',{name:'Previous vehicle',exact:true}).click();
+      await page.getByRole('button',{name:'Start Free Journey',exact:true}).click();
     }
     await page.keyboard.press('r');
     await expect(page.locator('.hud')).toContainText(vehicle);

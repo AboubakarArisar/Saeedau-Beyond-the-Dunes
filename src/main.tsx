@@ -6,7 +6,8 @@ import {createGameAudio,defaults,preference,savePreference,type AudioSettings,ty
 import {Radio,shortcuts,type Shortcuts} from './Radio';
 import {Credits} from './Credits';
 import {RotateScreen,TouchDrive,touchDevice,useMedia,type DriveAction} from './TouchDrive';
-import {seasons,type Season} from './seasons';
+import type {Season} from './seasons';
+import {Garage,JourneySetup} from './JourneyMenus';
 import {discoveries,modes,newRun,places,raceTime,record,recordKey,score,type Mode,type Records,type Run} from './run';
 import '@fontsource-variable/manrope';
 import './style.css';
@@ -20,6 +21,7 @@ const time=(seconds:number)=>{
 
 function App(){
  const host=useRef<HTMLDivElement>(null);
+ const previewFrame=useRef<HTMLDivElement>(null);
  const [menu,setMenu]=useState('home');
  const [stats,setStats]=useState([0,0]);
  const [failed,setFailed]=useState(false);
@@ -31,8 +33,6 @@ function App(){
  const [mode,setMode]=useState<Mode>('journey');
  const [run,setRun]=useState<Run>(()=>newRun('journey'));
  const [records,setRecords]=useState<Records>(()=>preference('records',{}));
- const [previewAngle,setPreviewAngle]=useState(0);
- const [previewZoom,setPreviewZoom]=useState(0);
  const recordsRef=useRef(records);
  const savedRun=useRef(false);
  const settingsBack=useRef('home');
@@ -55,7 +55,7 @@ function App(){
  const [keyError,setKeyError]=useState('');
  const sound=useRef<ReturnType<typeof createGameAudio>|null>(null);
  const motion=useRef<Motion>({speed:0,sand:false,throttle:false});
- const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,recenter,season,mode,preview:false,finish:false,previewAngle,previewZoom});
+ const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,recenter,season,mode,preview:false,garage:false,finish:false,previewFrame,previewAngle:0,previewZoom:0});
  options.current.paused=menu!==''||rotate;
  options.current.shadows=shadows;
  options.current.vehicle=vehicle;
@@ -66,6 +66,7 @@ function App(){
  options.current.season=season;
  options.current.mode=mode;
  options.current.preview=menu==='garage'||menu==='setup';
+ options.current.garage=menu==='garage';
  useEffect(()=>{
   if(!portrait)setPortraitOverride(false);
   touch.current.clear();
@@ -159,11 +160,16 @@ function App(){
  const best=records[recordKey(mode,vehicle,season)];
  const found=discoveries(run.discoveries);
  const nextDiscovery=places.find(place=>!found.includes(place));
- const vehicleButtons=<div className="vehicle-options" role="group" aria-label="Vehicle selection">
-  {(Object.keys(vehicles) as Vehicle[]).map(key=><button key={key} aria-pressed={vehicle===key} onClick={()=>setVehicle(key)}>{vehicles[key].name}</button>)}
- </div>;
- options.current.previewAngle=previewAngle;
- options.current.previewZoom=previewZoom;
+ const preview={
+  frame:previewFrame,vehicle,selectVehicle:setVehicle,
+  orbit:(delta:number)=>{
+   const angle=options.current.previewAngle+delta;
+   options.current.previewAngle=Math.atan2(Math.sin(angle),Math.cos(angle));
+  },
+  zoom:(delta:number)=>{
+   options.current.previewZoom=Math.max(-.35,Math.min(.55,options.current.previewZoom+delta));
+  },
+ };
  return <main className={mobile?'touch-layout':undefined}>
   <div className="world" ref={host}/>
   <div className="game-interface" inert={rotate}>
@@ -174,17 +180,10 @@ function App(){
       <button className="start-journey" onClick={()=>setMenu('setup')}>start journey</button>
       <nav className="title-nav" aria-label="Main menu">{['Garage','Settings','Credits'].map(label=><button key={label} onClick={()=>{settingsBack.current=garageBack.current='home';setMenu(label.toLowerCase());}}>{label}</button>)}</nav>
     </div>
-  </section>:menu==='credits'?<Credits back={()=>setMenu('home')}/>:menu==='setup'?<section className="panel run-panel setup-panel">
-   <h1>Choose your journey</h1>
-   <div className="mode-options" role="group" aria-label="Game mode">{(Object.keys(modes) as Mode[]).map(key=><button key={key} aria-pressed={mode===key} onClick={()=>setMode(key)}>
-    <strong>{modes[key].name}</strong><span>{modes[key].objective}</span>
-   </button>)}</div>
-   <div className="season-select"><label htmlFor="journey-season">Season</label><select id="journey-season" value={season} onChange={event=>setSeason(event.target.value as Season)}>
-    {(Object.keys(seasons) as Season[]).map(key=><option key={key} value={key}>{seasons[key].name}</option>)}
-   </select></div>
-   {vehicleButtons}
-   <nav><button onClick={startRun}>Start {modes[mode].name}</button><button onClick={()=>{garageBack.current='setup';setMenu('garage');}}>Garage</button><button onClick={()=>setMenu('home')}>Back</button></nav>
-  </section>:menu==='results'?<section className="panel run-panel results-panel">
+  </section>:menu==='credits'?<Credits back={()=>setMenu('home')}/>:menu==='setup'?
+   <JourneySetup {...preview} mode={mode} selectMode={setMode} season={season} selectSeason={setSeason}
+    back={()=>setMenu('home')} garage={()=>{garageBack.current='setup';setMenu('garage');}} start={startRun}/>:
+   menu==='garage'?<Garage {...preview} back={()=>setMenu(garageBack.current)}/>:menu==='results'?<section className="panel run-panel results-panel">
    <small>{modes[run.mode].name}</small>
    <h1>{run.outcome==='timeout'?'Time expired':run.leg===7?'Welcome to Saeedau':'Expedition complete'}</h1>
    <p><strong>{scored.total.toLocaleString()} points</strong>{best&&<> · Personal best {best.score.toLocaleString()}</>}</p>
@@ -193,8 +192,8 @@ function App(){
    {run.mode==='explorer'&&<p>{found.length} / {places.length} discoveries{found.length>0&&<> · {found.map(place=>place.name).join(', ')}</>}</p>}
    <dl className="run-breakdown">{Object.entries(scored.breakdown).filter(([,value])=>value!==0).map(([label,value])=><React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
    <nav><button onClick={startRun}>Play again</button><button onClick={()=>setMenu('setup')}>Journey setup</button><button onClick={()=>setMenu('home')}>Main menu</button></nav>
-  </section>:menu?<section className={menu==='garage'?'panel run-panel garage-panel':'panel run-panel'}>
-   <small>THAR DESERT / UMERKOT TO SAEEDAU</small><h1>{menu==='garage'?'Garage':menu==='pause'?'Journey paused':'Settings'}</h1>
+  </section>:menu?<section className="panel run-panel">
+   <small>THAR DESERT / UMERKOT TO SAEEDAU</small><h1>{menu==='pause'?'Journey paused':'Settings'}</h1>
    {menu==='settings'&&<label><input type="checkbox" checked={shadows} onChange={event=>{setShadows(event.target.checked);localStorage.setItem('saeedau.shadows',String(event.target.checked));}}/> Dynamic shadows</label>}
    {menu==='settings'&&<p><label><input type="checkbox" checked={recenter} onChange={event=>{setRecenter(event.target.checked);savePreference('camera.recenter',event.target.checked);}}/> Recenter chase camera after orbiting</label></p>}
    {menu==='settings'&&<fieldset className="audio-settings"><legend>Audio</legend>
@@ -216,22 +215,9 @@ function App(){
      <button onClick={()=>{setBindings(shortcuts);setKeyError('');}}>Restore defaults</button>
     </details>
    </fieldset>}
-   {menu==='garage'&&<>
-    {vehicleButtons}
-    <dl className="run-breakdown">
-     <dt>Top speed</dt><dd>{Math.round(vehicles[vehicle].top*3.6)} km/h</dd>
-     <dt>Acceleration</dt><dd>{vehicles[vehicle].acceleration} m/s²</dd>
-     <dt>Braking</dt><dd>{vehicles[vehicle].braking} m/s²</dd>
-     <dt>Handling</dt><dd>{{jeep:'Balanced',kekro:'Steady',unique:'Agile'}[vehicle]}</dd>
-    </dl>
-    <div className="vehicle-options" role="group" aria-label="Preview controls">
-     <button onClick={()=>setPreviewAngle(value=>value-.45)}>Rotate left</button><button onClick={()=>setPreviewAngle(value=>value+.45)}>Rotate right</button>
-     <button onClick={()=>setPreviewZoom(value=>value===0?-1.7:0)}>{previewZoom===0?'Zoom in':'Zoom out'}</button>
-    </div>
-   </>}
    {menu==='pause'&&run.mode==='explorer'&&<details open><summary>Discoveries · {found.length} / {places.length}</summary><ul>{places.map(place=><li key={place.name}>{found.includes(place)?'✓ ':''}{place.name}</li>)}</ul></details>}
    <nav>{menu==='pause'?<><button onClick={enter}>Resume</button><button onClick={()=>{if(window.confirm('Restart this run?'))startRun();}}>Restart</button><button onClick={()=>{settingsBack.current='pause';setMenu('settings');}}>Settings</button>
-    {run.mode==='explorer'&&<button onClick={()=>{options.current.finish=true;}}>Finish expedition</button>}<button onClick={exitRun}>Main menu</button></>:<button onClick={()=>setMenu(menu==='settings'?settingsBack.current:garageBack.current)}>Back</button>}</nav>
+    {run.mode==='explorer'&&<button onClick={()=>{options.current.finish=true;}}>Finish expedition</button>}<button onClick={exitRun}>Main menu</button></>:<button onClick={()=>setMenu(settingsBack.current)}>Back</button>}</nav>
   </section>:<>
    <aside className="hud" aria-label="Driving dashboard">
     <div className="hud-speed"><strong>{stats[0]}</strong><span>km/h</span></div>
@@ -258,7 +244,7 @@ function App(){
       {controls&&<p>WASD or arrows to drive · Space handbrake · Drag to orbit · Scroll to zoom · R reset · Esc pause</p>}
     </aside>}
   </>}
-  <Radio visible={!failed&&!rotate&&(!menu||menu==='garage')} volume={settings.mute?0:settings.master*settings.music} music={settings.music}
+  <Radio visible={!failed&&!rotate&&!menu} volume={settings.mute?0:settings.master*settings.music} music={settings.music}
    setMusic={value=>adjust('music',value)} bindings={bindings}/>
   </div>
   {rotate&&<RotateScreen proceed={()=>setPortraitOverride(true)}/>}

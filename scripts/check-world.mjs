@@ -36,12 +36,12 @@ try {
   await button('start journey').click();
   await shot('modes');
   await button('Garage').click();
-  await button('Kekro').click();await button('Rotate right').click();await shot('garage');
-  await button('Long Chassis jeep').click();await button('Back').click();
-  for(const [value,label] of [['winter','Winter'],['monsoon','Monsoon'],['dry','Dry / Hot'],['summer','Summer']]){
-    await page.getByLabel('Season',{exact:true}).selectOption(value);
-    await expect(page.getByLabel('Season',{exact:true}).locator('option:checked')).toHaveText(label);
-    await shot(value);
+  await button('Previous vehicle').click();await shot('garage');
+  await button('Next vehicle').click();await button('Back').click();
+  for(const label of ['Winter','Monsoon','Dry','Summer']){
+    await button(label).click();
+    await expect(button(label)).toHaveAttribute('aria-pressed','true');
+    await shot(label.toLowerCase());
   }
   await button('Start Free Journey').click();
   await page.keyboard.down('w');
@@ -111,7 +111,7 @@ try {
     const query=mode==='Checkpoint Challenge'?'timeout=1':mode==='Desert Explorer'?'worldShot=31':'worldShot=6999&visited=6';
     await page.goto(base+'/?'+query);
     await button('start journey').click();
-    await page.getByRole('button',{name:new RegExp('^'+mode)}).click();
+    await page.getByRole('group',{name:'Game mode'}).getByRole('button',{name:new RegExp(mode)}).click();
     if(mode==='Speed Racing'){
       await page.evaluate(()=>{
         const observer=new MutationObserver(mutations=>{

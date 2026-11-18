@@ -18,28 +18,10 @@
 .checkpoint-toast small{display:block;color:#ffd2a0;font-size:.75rem}
 .run-panel{max-height:calc(100dvh - 2rem);bottom:clamp(1rem,6vh,4rem);overflow:auto;border-radius:12px}
 .run-panel h1{font-size:clamp(1.8rem,5vw,3.2rem);margin:.35em 0 .65em}
-.setup-panel{width:min(470px,calc(100% - 2rem))}
-.mode-options{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.mode-options button{text-align:left;padding:10px;border-radius:6px}
-.mode-options span{display:block;font-size:.74rem;font-weight:550;line-height:1.35;margin-top:4px}
-.mode-options button[aria-pressed=true],.vehicle-options button[aria-pressed=true]{background:#f1b17b;color:#21170e;border-color:#ffdcba}
-.vehicle-options{display:flex;flex-wrap:wrap;gap:6px}
-.vehicle-options button{font-size:.8rem;border-radius:5px}
-.season-select{display:flex;align-items:center;gap:12px;margin:12px 0}
-.season-select select{background:#443127;color:#fff5df;border:1px solid #bc916d;border-radius:5px;padding:5px}
 .run-breakdown{display:grid;grid-template-columns:1fr auto;gap:4px 16px;font-variant-numeric:tabular-nums}
 .run-breakdown dd{margin:0;text-align:right}
 .results-panel{background:#211812f2;border-color:#e6b17e}
 .race-countdown{position:absolute;left:50%;top:50%;translate:-50% -50%;font-size:clamp(4rem,12vw,9rem);font-weight:800;text-shadow:0 3px 22px #000;pointer-events:none}
-@media (max-width: 650px){
- .setup-panel,.garage-panel{max-height:69dvh;bottom:1rem;padding:1rem}
- .touch-layout .garage-panel{max-height:55dvh}
- .touch-layout:has(.garage-panel) .radio{bottom:auto;top:max(12px,env(safe-area-inset-top))}
- .mode-options button{padding:6px}
- .mode-options span{font-size:.68rem}
-}
 @media (max-height: 500px) and (orientation: landscape){
- .setup-panel,.garage-panel{max-height:calc(100dvh - 2rem);width:min(420px,54vw);padding:12px}
- .touch-layout .garage-panel{max-height:calc(100dvh - 2rem)}
  .touch-layout .run-panel h1{font-size:clamp(1.65rem,5vw,2.2rem)}
 }

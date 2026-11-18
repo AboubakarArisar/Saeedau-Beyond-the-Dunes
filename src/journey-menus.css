@@ -1,0 +1,244 @@
+.journey-menu {
+  --ink:#fff8ec;
+  --muted:#ded3c2;
+  --accent:#ffc184;
+  --gutter:clamp(22px,5vw,88px);
+  position:absolute;
+  inset:0;
+  display:grid;
+  padding:max(16px,env(safe-area-inset-top)) max(var(--gutter),env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(var(--gutter),env(safe-area-inset-left));
+  color:var(--ink);
+  isolation:isolate;
+  background:
+    linear-gradient(0deg,#141514 0%,#141514e8 12%,transparent 52%),
+    linear-gradient(95deg,#121413f0 0%,#141613c4 25%,#17181638 56%,transparent 78%),
+    linear-gradient(180deg,#151716a6,transparent 21%);
+}
+.journey-menu button {
+  background:none;
+  color:var(--ink);
+  border:0;
+  border-radius:0;
+  transition:color .22s ease,background-color .22s ease,border-color .22s ease;
+}
+.journey-menu button:hover {color:var(--accent);filter:none}
+.journey-menu button:focus-visible,.showroom:focus-visible {outline:2px solid var(--accent);outline-offset:3px}
+.journey-top {
+  grid-area:top;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+}
+.journey-link {
+  min-height:44px;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:0 4px;
+  text-transform:uppercase;
+  font-size:.75rem;
+  letter-spacing:.16em;
+}
+.journey-label {
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.2em;
+  font-size:.66rem;
+  font-weight:800;
+}
+.journey-setup {
+  grid-template:"top top" auto "intro stage" minmax(0,1fr) "modes modes" auto "actions actions" auto / minmax(0,39fr) minmax(0,61fr);
+  column-gap:clamp(12px,2vw,40px);
+  row-gap:clamp(10px,2vh,28px);
+}
+.journey-intro {grid-area:intro;align-self:center}
+.journey-menu h1 {
+  margin:0;
+  font-size:clamp(2.9rem,6.45vw,8.4rem);
+  line-height:.82;
+  font-weight:850;
+  letter-spacing:-.065em;
+  text-transform:uppercase;
+  text-wrap:balance;
+}
+.journey-objective {
+  margin-top:clamp(14px,3vh,38px);
+  max-width:32rem;
+  min-height:4.4rem;
+  animation:showroom-reveal .28s ease both;
+}
+.journey-objective p,.garage-info>p {
+  margin:0 0 .36rem;
+  font-weight:750;
+  font-size:clamp(1rem,1.8vw,1.65rem);
+  color:var(--accent);
+  letter-spacing:-.035em;
+}
+.journey-objective>span {color:var(--muted);font-size:clamp(.79rem,1.2vw,1rem);line-height:1.45}
+.showroom {grid-area:stage;min-width:0;min-height:0;cursor:grab;touch-action:none}
+.showroom:active {cursor:grabbing}
+.setup-showroom {pointer-events:none}
+.mode-track {
+  grid-area:modes;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:clamp(8px,1.5vw,24px);
+}
+.mode-track button {
+  display:grid;
+  text-align:left;
+  align-content:start;
+  min-height:86px;
+  gap:3px;
+  padding:8px 9px 10px;
+  border-top:1px solid #fff4dc42;
+}
+.mode-track button[aria-pressed=true] {
+  border-color:var(--accent);
+  background:linear-gradient(180deg,#ffcd8b25,transparent);
+  color:var(--accent);
+}
+.mode-symbol {display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:clamp(1.15rem,2.2vw,2.5rem);font-weight:770;line-height:1;letter-spacing:-.065em}
+.mode-track strong {font-size:clamp(.74rem,1.35vw,1.15rem);font-weight:850;line-height:1.13;text-transform:uppercase;letter-spacing:-.03em}
+.mode-tagline {color:var(--muted);font-size:clamp(.67rem,1vw,.86rem);line-height:1.25}
+.journey-actions {
+  grid-area:actions;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  gap:clamp(10px,2vw,30px);
+  align-items:end;
+}
+.season-rail>div {display:flex;width:max-content;max-width:100%;gap:clamp(5px,1vw,15px)}
+.season-rail button {
+  min-height:42px;
+  padding:0 0 3px;
+  border-bottom:2px solid transparent;
+  color:var(--muted);
+  font-size:clamp(.64rem,1.05vw,.87rem);
+  text-transform:uppercase;
+  font-weight:800;
+  letter-spacing:.045em;
+}
+.season-rail button[aria-pressed=true] {color:var(--accent);border-color:var(--accent)}
+.vehicle-carousel {display:flex;align-items:center;justify-content:center;gap:clamp(3px,1.4vw,18px);touch-action:pan-y}
+.journey-menu .showroom-arrow {
+  flex:none;
+  display:grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  padding:0;
+  border:1px solid #fff4dc48;
+}
+.journey-menu .showroom-arrow:hover {border-color:var(--accent);background:#161715a8}
+.vehicle-current {min-width:clamp(92px,13vw,160px);text-align:center}
+.vehicle-current strong {display:block;font-size:clamp(.8rem,1.3vw,1rem);letter-spacing:.045em;text-transform:uppercase;line-height:1.1}
+.vehicle-indicator {display:flex;justify-content:center;gap:5px;margin-top:8px}
+.vehicle-indicator i {width:11px;height:2px;background:#fff4dc54}
+.vehicle-indicator i[data-active=true] {background:var(--accent)}
+.journey-menu .journey-start {
+  justify-self:end;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:49px;
+  padding:6px 10px 6px clamp(10px,1.6vw,22px);
+  background:var(--accent);
+  color:#171613;
+  text-transform:uppercase;
+  font-size:clamp(.67rem,1.1vw,.95rem);
+  font-weight:850;
+  letter-spacing:.065em;
+  text-align:left;
+}
+.journey-menu .journey-start:hover {background:#ffdbab;color:#171613}
+.journey-start svg {flex:none}
+.garage-showroom {
+  grid-template:"top top" auto "info stage" minmax(0,1fr) ". footer" auto / minmax(0,34fr) minmax(0,66fr);
+  gap:10px clamp(12px,2vw,36px);
+  background:
+    linear-gradient(0deg,#141514f5,transparent 44%),
+    linear-gradient(98deg,#131514ee 0%,#131514a8 29%,transparent 70%),
+    linear-gradient(180deg,#15171693,transparent 22%);
+}
+.garage-info {grid-area:info;align-self:center;animation:showroom-reveal .3s ease both}
+.garage-info h1 {font-size:clamp(3rem,6.15vw,8rem);text-wrap:initial}
+.garage-info>p {margin-top:.85rem;color:var(--muted)}
+.garage-specs {margin:clamp(1.1rem,4vh,2.4rem) 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(10px,2vw,23px)}
+.garage-specs div {border-top:1px solid #fff4dc40;padding-top:7px}
+.garage-specs dt {color:var(--muted);text-transform:uppercase;letter-spacing:.12em;font-size:clamp(.61rem,.86vw,.78rem);font-weight:800}
+.garage-specs dd {margin:2px 0 0;font-size:clamp(1rem,2vw,2.05rem);font-weight:800;letter-spacing:-.055em;line-height:1.16}
+.garage-specs small {font-size:.5em;font-weight:650;letter-spacing:0;color:var(--muted)}
+.garage-footer {grid-area:footer;text-align:center}
+.garage-footer p {margin:8px 0 0;font-size:.69rem;color:var(--muted)}
+.garage-footer p>span:nth-child(2) {display:none}
+@keyframes showroom-reveal {from{opacity:.5;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+@media (max-width:760px) and (orientation:portrait) {
+  .journey-menu {
+    --gutter:16px;
+    padding-bottom:max(10px,env(safe-area-inset-bottom));
+    row-gap:7px;
+    overflow-y:auto;
+    background:linear-gradient(0deg,#141514 0%,#141514f5 37%,transparent 72%),linear-gradient(180deg,#151716d9,transparent 43%);
+  }
+  .journey-setup {grid-template:"top" auto "intro" auto "stage" minmax(140px,1fr) "modes" auto "actions" auto / minmax(0,1fr)}
+  .journey-menu h1 {font-size:clamp(1.9rem,7.5vw,3.3rem);text-wrap:initial;line-height:.92}
+  .journey-objective {min-height:3.6rem;margin-top:6px}
+  .journey-objective p {margin:0;font-size:.95rem}
+  .journey-objective>span {font-size:.74rem;display:block}
+  .mode-track {grid-template-columns:minmax(0,1fr);gap:0}
+  .mode-track button {grid-template-columns:50px minmax(0,1fr) auto;align-items:center;min-height:42px;padding:3px 7px;gap:7px}
+  .mode-symbol {font-size:1rem}
+  .mode-symbol svg {width:17px;height:17px}
+  .mode-track strong {font-size:.73rem}
+  .mode-tagline {font-size:.62rem;text-align:right}
+  .journey-actions {grid-template-columns:minmax(0,1fr) auto;gap:3px 6px;align-items:center}
+  .season-rail {grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .season-rail>div {gap:clamp(10px,3.4vw,28px)}
+  .season-rail button {min-height:44px}
+  .journey-menu .journey-start {min-height:44px;gap:4px;white-space:normal}
+  .journey-start svg {width:16px;height:16px}
+  .vehicle-carousel {justify-content:flex-start}
+  .journey-menu .showroom-arrow {width:40px;height:44px}
+  .vehicle-current {min-width:78px}
+  .vehicle-current strong {font-size:.69rem}
+  .garage-showroom {
+    grid-template:"top" auto "info" auto "stage" minmax(155px,1fr) "footer" auto / minmax(0,1fr);
+    background:linear-gradient(0deg,#141514 0%,#141514d1 9%,transparent 43%),linear-gradient(180deg,#151716e8,transparent 43%);
+  }
+  .garage-info>p {margin-top:6px;font-size:.92rem}
+  .garage-specs {margin-top:12px;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .garage-specs dt {letter-spacing:.04em}
+  .garage-specs dd {font-size:clamp(.95rem,4.4vw,1.4rem)}
+  .garage-footer .vehicle-carousel {justify-content:center}
+  .garage-footer {padding-bottom:6px}
+}
+@media (pointer:coarse) {
+  .garage-footer p>span:first-child,.garage-footer .showroom-keys {display:none}
+  .garage-footer p>span:nth-child(2) {display:inline}
+}
+@media (max-width:360px) and (orientation:portrait) {
+  .journey-actions {grid-template-columns:minmax(148px,1fr) minmax(0,1fr)}
+  .journey-actions .showroom-arrow {width:36px}
+  .journey-actions .vehicle-current {min-width:69px}
+  .journey-menu .journey-start {width:100%}
+}
+@media (max-height:550px) and (orientation:landscape) {
+  .journey-menu {--gutter:22px;padding-top:4px;padding-bottom:max(8px,env(safe-area-inset-bottom));row-gap:4px}
+  .journey-menu h1 {font-size:clamp(1.85rem,6vw,3.7rem)}
+  .journey-objective {min-height:0;margin-top:7px}
+  .journey-objective p {font-size:.92rem;margin-bottom:2px}
+  .journey-objective>span {display:block;font-size:.72rem}
+  .mode-track button {min-height:60px;padding:4px 5px;gap:2px}
+  .mode-symbol {font-size:1.1rem}
+  .mode-symbol svg {width:15px;height:15px}
+  .garage-specs {margin-top:8px;gap:8px}
+  .garage-specs div {padding-top:3px}
+  .garage-info>p {margin-top:6px;font-size:.85rem}
+}
+@media (prefers-reduced-motion:reduce) {
+  .journey-menu * {animation:none;transition:none}
+}

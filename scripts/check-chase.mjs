@@ -44,7 +44,7 @@ try{
   await page.keyboard.press('r');await expect(speed()).toHaveText('0');
   for(const vehicle of ['Kekro','Unique 70 motorcycle','Long Chassis jeep']){
     await button('Pause').click();page.once('dialog',dialog=>dialog.accept());await button('Main menu').click();
-    await button('start journey').click();await button(vehicle).click();await button('Start Free Journey').click();
+    await button('start journey').click();await button('Previous vehicle').click();await button('Start Free Journey').click();
     await expect(page.locator('.hud-vehicle')).toHaveText(vehicle);
     await expect(speed()).toHaveText('0');
     await page.keyboard.down('w');
