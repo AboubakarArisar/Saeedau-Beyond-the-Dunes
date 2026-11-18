@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {mount} from './scene';
-import {LEG,LENGTH,stops,vehicles,type Vehicle} from './driving';
+import {checkpoints,stops,vehicles,type Vehicle} from './driving';
 import {createGameAudio,defaults,preference,savePreference,type AudioSettings,type Motion} from './gameAudio';
 import {isControl,Radio,shortcuts,type Shortcuts} from './Radio';
 import {RotateScreen,TouchDrive,touchDevice,useMedia,type DriveAction} from './TouchDrive';
@@ -17,7 +17,10 @@ function App(){
  const [failed,setFailed]=useState(false);
  const [vehicle,setVehicle]=useState<Vehicle>('jeep');
  const [leg,setLeg]=useState(0);
- const [remaining,setRemaining]=useState(LEG);
+ const [remaining,setRemaining]=useState<number>(checkpoints[1]);
+ const [announcement,setAnnouncement]=useState('');
+ const previousLeg=useRef(0);
+ const announcedOrigin=useRef(false);
  const [recenter,setRecenter]=useState(()=>preference('camera.recenter',true));
  const [controls,setControls]=useState(false);
  const mobile=useMedia(touchDevice),portrait=useMedia('(orientation: portrait)');
@@ -57,13 +60,23 @@ function App(){
   window.addEventListener('blur',blur);document.addEventListener('visibilitychange',hidden);
   return ()=>{clearTimeout(timer);window.removeEventListener('blur',blur);document.removeEventListener('visibilitychange',hidden);};
  },[mobile]);
- useEffect(()=>{if (!host.current) return; try{return mount(host.current,(speed,progress,telemetry)=>{
+ useEffect(()=>{if (!host.current) return; try{return mount(host.current,(speed,position,checkpoint,progress,telemetry)=>{
   motion.current=telemetry;
   setStats([Math.round(speed),Math.floor(progress*100)]);
-  setLeg(Math.floor(progress*(stops.length-1)));
-  const position=progress*LENGTH;
-  setRemaining(Math.ceil(Math.max(0,Math.min(LENGTH,(Math.floor(position/LEG)+1)*LEG)-position)));
+  setLeg(checkpoint);
+  setRemaining(Math.ceil(Math.abs((checkpoints[checkpoint+1]??position)-position)));
  },options.current);}catch(error){console.error(error);setFailed(true);}},[]);
+ useEffect(()=>{
+  const previous=previousLeg.current;
+  previousLeg.current=leg;
+  if(leg!==previous)setAnnouncement(leg>previous?leg===stops.length-1?'Welcome to Saeedau':stops[leg]:'');
+  if(leg<previous)announcedOrigin.current=false;
+ },[leg]);
+ useEffect(()=>{
+  if(!announcement||leg===stops.length-1)return;
+  const timer=window.setTimeout(()=>setAnnouncement(''),3500);
+  return ()=>clearTimeout(timer);
+ },[announcement,leg]);
  useEffect(()=>{const key=(event:KeyboardEvent)=>{if(event.code==='Escape'&&!event.repeat&&!isControl(event.target))setMenu(current=>current?'':'pause');}; window.addEventListener('keydown',key);return ()=>window.removeEventListener('keydown',key);},[]);
  useEffect(()=>{savePreference('audio',settings);savePreference('radio.keys',bindings);},[settings,bindings]);
  useEffect(()=>()=>{sound.current?.dispose();sound.current=null;},[]);
@@ -81,6 +94,7 @@ function App(){
    void sound.current.resume().catch(error=>console.warn('Could not enable game audio',error));
   }catch(error){console.warn('Game sound is unavailable',error);}
   if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
+  if(!announcedOrigin.current&&leg===0){announcedOrigin.current=true;setAnnouncement(stops[0]);}
   setMenu('');
  }
  return <main className={mobile?'touch-layout':undefined}>
@@ -130,6 +144,7 @@ function App(){
     </div>
    </aside>
    <button className="pause" onClick={()=>setMenu('pause')}>Pause</button>
+   {announcement&&<aside className="checkpoint-toast" role="status"><small>{leg===stops.length-1?'Journey complete':leg===0?'Journey begins':'Checkpoint reached'}</small>{announcement}</aside>}
    {mobile?<TouchDrive inputs={touch.current} reset={()=>{options.current.reset++;}}/>:
     <aside className="drive-help"><button aria-expanded={controls} onClick={()=>setControls(!controls)}>{controls?'Hide controls':'Controls'}</button>
       {controls&&<p>WASD or arrows to drive · Space handbrake · Drag to orbit · Scroll to zoom · R reset · Esc pause</p>}

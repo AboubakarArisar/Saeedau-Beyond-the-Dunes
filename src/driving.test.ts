@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {advance,dampHeading,LEG,LENGTH,road,start,stops,vehicles,type Vehicle} from './driving';
+import {advance,checkpoints,dampHeading,LENGTH,road,start,stops,vehicles,visit,type Vehicle} from './driving';
 
 const throttle={throttle:true,reverse:false,steer:0,brake:false};
 
@@ -31,16 +31,26 @@ describe('desert journey',()=>{
     expect(car.lateral).toBeCloseTo(road(car.position),3);
   });
   it('covers all seven stops in order',()=>{
-    expect(stops).toEqual(['Umerkot','Chhor','Jeelani Mor','Tebhri Bhanbhra','Dodhar','Pataho','Saeedau']);
-    expect(LENGTH).toBe(6*LEG);
+    expect(stops).toEqual(['Umerkot','Chhor','Jeelani Mor','Tebhri Bhanbhra','Dodhar','Pataho','Hingorao','Saeedau']);
+    expect(checkpoints).toHaveLength(stops.length);
+    expect(LENGTH).toBe(7000);
   });
   it('gives each vehicle its own paved and sand speed limits',()=>{
     for(const vehicle of Object.keys(vehicles) as Vehicle[]){
-      const car={...start(),speed:80};
-      advance(car,.016,throttle,vehicle);
+      const car=start();
+      for(let step=0;step<3600;step++){
+        advance(car,.02,throttle,vehicle);
+        car.lateral=road(car.position);
+      }
       expect(car.speed).toBe(vehicles[vehicle].top);
       car.lateral=road(car.position)+15;
       advance(car,.016,throttle,vehicle);
+      expect(car.speed).toBeLessThan(vehicles[vehicle].top);
+      expect(car.speed).toBeGreaterThan(vehicles[vehicle].sand);
+      for(let step=0;step<500;step++){
+        advance(car,.02,throttle,vehicle);
+        car.lateral=road(car.position)+15;
+      }
       expect(car.speed).toBe(vehicles[vehicle].sand);
     }
   });
@@ -51,5 +61,21 @@ describe('desert journey',()=>{
     expect(car.speed).toBe(0);
     advance(car,.016,{...throttle,throttle:false,reverse:true});
     expect(car.position).toBeLessThan(LENGTH);
+  });
+  it('requires nearby checkpoints in order and finishes a normal-paced simulated route in six to eight minutes',()=>{
+    const car=start();
+    let reached=0,seconds=0;
+    expect(visit(0,checkpoints[2],road(checkpoints[2]))).toBe(0);
+    expect(visit(0,checkpoints[1],road(checkpoints[1])+14)).toBe(0);
+    for(;seconds<480&&reached<7;seconds+=.02){
+      const look=15,target=Math.atan2(road(car.position+look)-car.lateral,look);
+      const steer=Math.max(-1,Math.min(1,(target-car.heading)*4));
+      advance(car,.02,{throttle:car.speed<16.8,reverse:false,steer,brake:false});
+      expect(Math.abs(car.lateral-road(car.position))).toBeLessThan(4);
+      reached=visit(reached,car.position,car.lateral);
+    }
+    expect(reached).toBe(7);
+    expect(seconds).toBeGreaterThanOrEqual(360);
+    expect(seconds).toBeLessThan(480);
   });
 });

@@ -167,6 +167,86 @@ def roadside():
     pot.mesh()
 
 
+def settlement():
+    for index, plaster in enumerate([(.53,.36,.21),(.55,.49,.37),(.35,.43,.37)]):
+        shop = Asset(f'Market{index}',83+index)
+        shop.box((0,0,1.16),(5.7,4,2.8),plaster)
+        shop.box((0,0,2.58),(5.96,4.22,.23),(.31,.23,.15))
+        shop.box((0,-1.83,2.79),(5.72,.33,.45),plaster)
+        for door in [-1.39,1.34]:
+            for slat in range(16):
+                shop.box((door,2.01,.34+slat*.101),(2.22,.045,.096),(.20,.25,.23))
+            shop.box((door,2.08,2.15),(2.28,.16,.34),(.22,.29,.26))
+        shop.box((0,2.66,.06),(5.75,1.37,.24),(.37,.28,.20))
+        for strip in range(14):
+            shop.box(((strip-6.5)*.42,2.62,2.03),(.425,1.43,.058),(.53,.24,.13) if strip%2 else (.63,.52,.33))
+        for side in [-1,1]:
+            shop.tube((side*2.76,3.21,-.12),(side*2.76,3.21,2.02),.052,.046,bark)
+        shop.mesh()
+    pole = Asset('Utility',92)
+    pole.tube((0,0,-.24),(0,0,6.25),.13,.075,(.28,.25,.21),8)
+    pole.box((0,0,5.94),(1.28,.10,.11),(.18,.17,.15))
+    for side in [-1,1]:
+        pole.box((side*.53,0,6.04),(.14,.14,.15),(.32,.28,.19))
+    pole.mesh()
+    lamp = Asset('Streetlamp',93)
+    lamp.tube((0,0,-.25),(0,0,4.7),.088,.052,(.20,.23,.21))
+    lamp.tube((0,0,4.7),(.65,0,5.12),.052,.038,(.20,.23,.21))
+    lamp.box((.75,0,5.1),(.36,.19,.13),(.56,.55,.41))
+    lamp.mesh()
+    trough=Asset('Trough',94)
+    trough.box((0,0,.04),(2.7,.83,.20),earth)
+    for side in [-1,1]:
+        trough.box((0,side*.38,.28),(2.77,.15,.55),earth)
+        trough.box((side*1.28,0,.28),(.15,.79,.55),earth)
+    trough.box((0,0,.24),(2.43,.57,.02),(.16,.25,.24))
+    trough.mesh()
+    goat=Asset('Goat',95)
+    hide=(.63,.51,.37)
+    goat.tube((0,-.27,.58),(0,.25,.61),.19,.20,hide,9)
+    goat.tube((0,.23,.59),(0,.45,.81),.11,.078,hide)
+    goat.tube((0,.42,.81),(0,.62,.76),.092,.051,hide,7)
+    for side in [-1,1]:
+        for depth in [-.21,.18]:
+            goat.tube((side*.106,depth,.54),(side*.12,depth-.04,.035),.047,.022,hide,5)
+        goat.tube((side*.05,.47,.84),(side*.086,.37,.98),.025,.007,bark,5)
+        goat.tube((side*.05,.47,.79),(side*.15,.46,.74),.032,.009,hide,5)
+    goat.tube((0,-.27,.63),(0,-.42,.76),.045,.012,hide,5)
+    goat.mesh()
+    bike=Asset('ParkedBike',96)
+    for depth in [-.59,.59]:
+        for radial in range(16):
+            a,b=tau*radial/16,tau*(radial+1)/16
+            bike.tube((0,depth+.24*cos(a),.26+.24*sin(a)),(0,depth+.24*cos(b),.26+.24*sin(b)),.041,.041,(.045,.041,.033),5)
+        for spoke in range(6):
+            angle=tau*spoke/6
+            bike.tube((0,depth,.26),(0,depth+.22*cos(angle),.26+.22*sin(angle)),.009,.009,(.44,.42,.35),4)
+    bike.tube((0,.59,.26),(0,.27,.84),.033,.031,(.47,.45,.38))
+    bike.tube((0,-.59,.26),(0,-.15,.64),.042,.035,(.15,.16,.15))
+    bike.box((0,.05,.65),(.25,.50,.17),(.48,.09,.046))
+    bike.box((0,-.31,.71),(.24,.35,.075),(.042,.037,.034))
+    bike.tube((-.23,.27,.91),(.23,.271,.91),.025,.025,(.35,.36,.32))
+    bike.mesh()
+    jeep=Asset('ParkedJeep',97)
+    enamel=(.69,.67,.54)
+    trim=(.05,.054,.048)
+    jeep.box((0,0,.60),(1.39,3.38,.35),enamel)
+    jeep.box((0,.99,.83),(1.39,1.30,.14),enamel)
+    jeep.box((0,-.35,1.51),(1.40,.94,.08),enamel)
+    jeep.box((0,.06,1.19),(1.34,.07,.53),(.15,.27,.28))
+    jeep.box((0,1.69,.72),(1.30,.11,.24),trim)
+    for side in [-1,1]:
+        jeep.box((side*.70,0,.66),(.035,3.22,.08),(.53,.07,.04))
+        jeep.tube((side*.63,-.75,.68),(side*.63,-.75,1.48),.036,.033,trim)
+        jeep.tube((side*.63,-.75,1.48),(side*.63,-1.49,1.42),.034,.034,trim)
+        jeep.tube((side*.63,-1.49,1.42),(side*.63,-1.49,.65),.034,.04,trim)
+        for depth in [-1.02,1.04]:
+            jeep.tube((side*.69,depth,.32),(side*.91,depth,.32),.31,.31,trim,14)
+            jeep.tube((side*.905,depth,.32),(side*.925,depth,.32),.16,.16,enamel,12)
+    jeep.tube((-.63,-1.49,1.42),(.63,-1.49,1.42),.034,.034,trim)
+    jeep.mesh()
+
+
 def export(folder, create):
     bpy.ops.object.select_all(action='DESELECT')
     create()
@@ -178,3 +258,4 @@ def export(folder, create):
 export('houses', lambda: [house(index) for index in range(3)])
 export('vegetation', lambda: [plant(kind, index) for kind in ('Kandi','Khumbat','Karir','Khimp') for index in range(3)])
 export('roadside', roadside)
+export('settlement', settlement)
