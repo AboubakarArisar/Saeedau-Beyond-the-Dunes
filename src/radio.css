@@ -1,0 +1,23 @@
+.radio{position:absolute;z-index:2;right:16px;bottom:64px;width:min(280px,calc(100% - 32px));padding:12px;background:#201916f5;border:1px solid #987453;box-shadow:0 5px 20px #0006;color:#fff1d5;font-size:.875rem}
+.radio-expanded{width:min(510px,calc(100% - 32px));max-height:calc(100dvh - 116px);overflow:auto}
+.radio header,.radio-transport,.radio-sources,.radio-time,.radio-volume{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.radio header{justify-content:space-between;font-weight:800;letter-spacing:-.025em}
+.radio small{display:block;color:#e6b588;font-size:.75rem;letter-spacing:.06em}
+.radio-title{color:#f6d2a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:7px 0}
+.radio button{padding:4px 8px}
+.radio button:disabled{opacity:.48;cursor:default}
+.radio button[aria-pressed=true],.radio button[aria-current=true]{background:#e0ad78;color:#241913}
+.radio-sources,.radio-time,.radio-volume,.radio-file,.radio-embed{margin:9px 0}
+.radio-embed{width:100%;min-width:200px;height:max(200px,min(270px,48vw));background:#130f0c}
+.radio-embed iframe{display:block;border:0}
+.radio-time{font-variant-numeric:tabular-nums}
+.radio-time input,.radio-time progress,.radio-volume input,.audio-settings label input[type=range]{flex:1;min-width:64px;accent-color:#edaf76}
+.radio-file{display:grid;gap:4px}.radio-file input{max-width:100%}
+.radio-queue{max-height:115px;overflow:auto;margin:5px 0;padding:0;list-style:none}
+.radio-queue li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px;margin:3px 0}
+.radio-queue button:first-child{text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.radio a{color:#ffca91}
+.audio-settings{margin-top:12px;display:grid;gap:6px}.audio-settings label{display:flex;align-items:center;gap:10px}
+.audio-settings details{font-size:.875rem}.audio-settings details label input{width:3em}
+.panel:has(.audio-settings){max-height:calc(100dvh - 32px);overflow:auto;bottom:16px}
+@media(max-width:680px){.radio{bottom:75px}.radio-expanded{max-height:calc(100dvh - 142px)}}
