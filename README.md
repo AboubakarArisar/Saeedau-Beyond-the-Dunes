@@ -15,6 +15,8 @@ If an older Windows checkout reports that Application Control blocked Rollup, ru
 
 Run `npm test` for driving tests and `npm run build` to produce a static site in `dist`.
 
+For Cloudflare Workers Builds, set the build command to `npm run build`, the deploy command to `npx wrangler deploy`, and the root directory to `/`. Deploy a branch that contains `wrangler.jsonc`; it tells Wrangler to publish the built `dist` directory directly. The game does not need the Cloudflare Vite plugin or a Worker script.
+
 **Thar Radio:** Expand the dashboard in the garage or while driving. My Music plays browser-compatible files from your device, without uploading them. Re-select your files after reloading. YouTube Radio uses the visible official player and stops when it is collapsed, hidden, or replaced by local music; individual tracks may not allow embedded playback. Use **M / P / N / B** to expand, play or pause, skip, and go back. Change these shortcuts and the four volume levels in Settings → Audio. Engine, wind, and tire sounds are synthesized, not field recordings. Run `node scripts/check-radio.mjs` with Microsoft Edge installed for the browser smoke test and screenshots.
 
 The Long Chassis uses an original Blender GLB modeled from the supplied side-view photograph. To regenerate it with Blender 5.2, run `blender -b --factory-startup --python-exit-code 1 --python tools/build_jeep.py`. Kekro and the Unique 70 still use their earlier prototype meshes.
