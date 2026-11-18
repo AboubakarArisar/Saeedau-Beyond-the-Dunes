@@ -42,7 +42,7 @@ export function decorate(group:T.Group, assets:Environment, from:number, to:numb
   const place=(name:string,distance:number,offset:number,scale:number,angle:number,near=false)=>{
     if(distance<from||distance>=to)return;
     const lateral=road(distance)+offset;
-    const inset=name.startsWith('Parked')?.24:.15;
+    const inset=name.startsWith('Parked')?.125:.15;
     transform.position.set(lateral,ground(lateral,distance)-inset,-distance);
     transform.rotation.y=angle;
     transform.scale.setScalar(scale);
@@ -55,6 +55,10 @@ export function decorate(group:T.Group, assets:Environment, from:number, to:numb
   for(let index=0;index<92;index++){
     const distance=from+random()*(to-from);
     const offset=(random()<.5?-1:1)*(6.3+random()**1.8*146);
+    if(offset>5&&offset<18&&checkpoints.some((anchor,index)=>{
+      const sign=index===0?42:index===checkpoints.length-1?anchor+15:anchor-12;
+      return distance>=sign-50&&distance<=sign+6;
+    }))continue;
     if(Math.abs(offset)<19&&random()<development(distance)*.7)continue;
     if(Math.abs(offset)>35&&Math.sin(distance*.051+offset*.15)>.46)continue;
     const kind=index<22?(index%3?'Kandi':'Khumbat'):(index%3?'Khimp':'Karir');
