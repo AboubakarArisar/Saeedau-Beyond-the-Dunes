@@ -9,6 +9,15 @@ export const vehicles = {
   unique: {name:'Unique 70 motorcycle', acceleration:10, top:26, sand:11, turn:1.22, radius:.33},
 };
 export type Vehicle = keyof typeof vehicles;
+export const chaseProfiles={
+  jeep:{distance:6.9,height:3.35,target:1.22,min:4.8},
+  kekro:{distance:8.4,height:4.05,target:1.52,min:5.7},
+  unique:{distance:5.8,height:2.75,target:.94,min:3.7},
+};
+export function dampHeading(current:number,target:number,dt:number){
+  const difference=target-current;
+  return current+Math.atan2(Math.sin(difference),Math.cos(difference))*(-Math.expm1(-6*dt));
+}
 export const road = (distance: number) => 34 * Math.sin(distance / 115) + 19 * Math.sin(distance / 57);
 export const grade = (distance: number) => 2.4 * Math.sin(distance / 76) + 5 * Math.sin(distance / 223);
 export function ground(lateral: number, distance: number) {

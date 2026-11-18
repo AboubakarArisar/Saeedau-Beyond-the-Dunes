@@ -24,6 +24,8 @@ export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;
   const [ytError,setYtError]=useState('');
   const [ytState,setYtState]=useState({playing:false,time:0,duration:0,index:-1,url:''});
   const [ready,setReady]=useState(false);
+  const [retry,setRetry]=useState(0);
+  const playDeadline=useRef<number|undefined>(undefined);
   const audio=useRef<HTMLAudioElement>(null), player=useRef<Player|null>(null), embed=useRef<HTMLDivElement>(null);
   const urls=useRef(new Set<string>()), nextId=useRef(0), loaded=useRef<number|undefined>(undefined);
   const heard=useRef(new Set<number>());
@@ -72,21 +74,24 @@ export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;
         },
         onStateChange:({target,data})=>{
           if(disposed)return;
-          if(data===1){if(document.hidden||!inView)target.pauseVideo();else setYtError('');}
+          if(data===1){
+            clearTimeout(playDeadline.current);
+            if(document.hidden||!inView)target.pauseVideo();else setYtError('');
+          }
           refresh();
         },
-        onError:({data})=>fail(`YouTube track unavailable (${data}). Try Next or open the playlist on YouTube.`),
-        onAutoplayBlocked:()=>fail('Browser blocked playback. Press Play inside the YouTube player.'),
+        onError:({data})=>{clearTimeout(playDeadline.current);fail(`YouTube track unavailable (${data}). Try Next or open the playlist on YouTube.`);},
+        onAutoplayBlocked:()=>{clearTimeout(playDeadline.current);fail('Browser blocked playback. Press Play inside the YouTube player.');},
       }});
     }).catch(()=>fail('YouTube could not connect. Try opening the playlist on YouTube.'));
     const visibility=()=>{if(document.hidden)player.current?.pauseVideo();};
     document.addEventListener('visibilitychange',visibility);
     return ()=>{
       disposed=true;observer.disconnect();document.removeEventListener('visibilitychange',visibility);
-      clearTimeout(timer);clearInterval(poll);player.current?.pauseVideo();player.current=null;
+      clearTimeout(timer);clearTimeout(playDeadline.current);clearInterval(poll);player.current?.pauseVideo();player.current=null;
       instance?.destroy();host.replaceChildren();
     };
-  },[showYouTube]);
+  },[showYouTube,retry]);
   function selectSource(value:Source){
     if(value===source)return;
     audio.current?.pause();player.current?.pauseVideo();setSource(value);
@@ -109,7 +114,17 @@ export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;
   }
   function toggle(){
     if(source==='youtube'){
-      if(showYouTube&&ready){if(player.current?.getPlayerState()===1)player.current.pauseVideo();else player.current?.playVideo();}
+      const currentPlayer=player.current;
+      if(showYouTube&&ready&&currentPlayer){
+        clearTimeout(playDeadline.current);
+        if(currentPlayer.getPlayerState()===1){currentPlayer.pauseVideo();return;}
+        setYtError('');
+        currentPlayer.playVideo();
+        playDeadline.current=window.setTimeout(()=>{
+          if(player.current===currentPlayer&&currentPlayer.getPlayerState()!==1)
+            setYtError('Playback did not start. Try Play inside the YouTube player or open the playlist on YouTube.');
+        },8000);
+      }
     }else if(current){if(audio.current?.paused)play(current);else audio.current?.pause();}
     else if(tracks.length)play(tracks[0]);
   }
@@ -172,16 +187,16 @@ export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;
       {showYouTube&&<>
         <div className="radio-embed" ref={embed}/>
         {!ready&&!ytError&&<p role="status">Connecting to YouTube…</p>}
-        {ytError&&<p role="status">{ytError}</p>}
+        {ytError&&<p role="status">{ytError} {!ready&&<button onClick={()=>setRetry(value=>value+1)}>Retry connection</button>}</p>}
         <a href={playlistUrl} target="_blank" rel="noreferrer">Open on YouTube</a>
         {ytState.url.startsWith('https://www.youtube.com/')&&<> · <a href={ytState.url} target="_blank" rel="noreferrer">Current video</a></>}
       </>}
-      {(source==='local'||showYouTube)&&<div className="radio-transport">
+      {expanded&&(source==='local'||showYouTube)&&<div className="radio-transport">
         <button disabled={source==='youtube'?!ready:!tracks.length} onClick={()=>move(-1)}>Previous</button>
         <button disabled={source==='youtube'?!ready:!tracks.length} onClick={toggle}>{playing?'Pause music':'Play music'}</button>
         <button disabled={source==='youtube'?!ready:!tracks.length} onClick={()=>move(1)}>Next</button>
       </div>}
-      {source==='youtube'&&!expanded&&<small>Expand to play YouTube.</small>}
+      {!expanded&&source==='local'&&tracks.length>0&&<button className="compact-play" onClick={toggle}>{playing?'Pause music':'Play music'}</button>}
       {expanded&&<>
         <div className="radio-time">
           <span>{clock(time[0])}</span>

@@ -17,10 +17,10 @@ try {
   await ready(desktop);
   await expect(desktop.getByRole('heading',{name:'saeedau.'})).toBeVisible();
   await expect(desktop.locator('.panel')).toHaveCount(0);
-  await desktop.screenshot({path:'artifacts/title-1366.png'});
+  await desktop.screenshot({path:'artifacts/fix-title-1366.png'});
   await desktop.setViewportSize({width:1920,height:1080});
   await desktop.waitForTimeout(400);
-  await desktop.screenshot({path:'artifacts/title-1920.png'});
+  await desktop.screenshot({path:'artifacts/fix-title-1920.png'});
   await desktop.setViewportSize({width:960,height:540});
   await desktop.getByRole('button',{name:'start journey'}).click();
   await desktop.keyboard.down('w');
@@ -37,15 +37,16 @@ try {
   });
   await ready(mobile);
   const rotate=mobile.getByRole('dialog',{name:'rotate your phone.'});
+  await expect(rotate).toHaveCount(0);
+  await mobile.getByRole('button',{name:'start journey'}).tap();
   await expect(rotate).toBeVisible();
-  await mobile.screenshot({path:'artifacts/title-rotate.png'});
+  await mobile.screenshot({path:'artifacts/fix-rotate.png'});
   await mobile.getByRole('button',{name:'Continue in portrait'}).tap();
   await expect(rotate).toHaveCount(0);
   await mobile.setViewportSize({width:844,height:390});
-  await expect(mobile.getByRole('button',{name:'start journey'})).toBeVisible();
+  await expect(mobile.getByRole('button',{name:'Accelerate'})).toBeVisible();
   await mobile.waitForTimeout(400);
-  await mobile.screenshot({path:'artifacts/title-mobile-landscape.png'});
-  await mobile.getByRole('button',{name:'start journey'}).tap();
+  await mobile.screenshot({path:'artifacts/fix-mobile-ready.png'});
   await expect.poll(()=>mobile.evaluate(()=>window.testGameAudio?.state)).toBe('running');
   const [go,steer]=await Promise.all(['Accelerate','Steer right'].map(async name=>{
     const bounds=await mobile.getByRole('button',{name,exact:true}).boundingBox();
@@ -57,7 +58,7 @@ try {
   try {await expect.poll(async()=>Number(await mobile.locator('.hud strong').textContent()),{timeout:15000}).toBeGreaterThan(3);}
   finally {await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
   await expect(mobile.locator('[data-held=true]')).toHaveCount(0);
-  await mobile.screenshot({path:'artifacts/touch-driving.png'});
+  await mobile.screenshot({path:'artifacts/fix-mobile-driving.png'});
   await mobile.getByRole('button',{name:'Reset'}).tap();
   await expect(mobile.locator('.hud strong')).toHaveText('0');
   await mobile.getByRole('button',{name:'Expand'}).tap();
@@ -67,7 +68,7 @@ try {
   await expect(rotate).toBeVisible();
   await mobile.setViewportSize({width:844,height:390});
   await expect(rotate).toHaveCount(0);
-  await expect(mobile.getByRole('button',{name:'Resume'})).toBeVisible();
+  await expect(mobile.getByRole('button',{name:'Accelerate'})).toBeVisible();
   expect(await mobile.evaluate(()=>document.documentElement.scrollWidth)).toBe(844);
   console.log('Desktop drive, mobile fallback and rotation, simultaneous touch, reset, radio and rotation pause passed.');
 } finally {
