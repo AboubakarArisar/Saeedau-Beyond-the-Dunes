@@ -11,6 +11,7 @@ If an older Windows checkout reports that Application Control blocked Rollup, ru
 - WASD or arrow keys: accelerate, reverse and steer
 - Space: handbrake; R: restart the route
 - Drag and scroll: orbit and zoom; Escape: pause
+- On touch devices, rotate to landscape or choose the portrait fallback. Hold **go** with a steering button to drive; reverse, handbrake, pause, and reset are available on screen.
 
 Run `npm test` for driving tests and `npm run build` to produce a static site in `dist`.
 

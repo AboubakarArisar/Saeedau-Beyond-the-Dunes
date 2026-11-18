@@ -54,7 +54,7 @@ try {
   await button('Expand').click();await button('My Music').click();
   await expect(button('Dune-two')).toHaveAttribute('aria-current','true');
   await button('Play music').click();
-  await button('Back').click();await button('Play').click();
+  await button('Back').click();await button('start journey').click();
   await expect(button('Pause music')).toBeVisible();
   await page.screenshot({path:'artifacts/radio-expanded.png'});
   await button('Collapse').click();

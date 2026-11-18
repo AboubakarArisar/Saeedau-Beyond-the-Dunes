@@ -1,14 +1,20 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import type {Motion} from './gameAudio';
+import type {DriveAction} from './TouchDrive';
 import {isControl} from './Radio';
 import {decorate,disposeEnvironment,loadEnvironment,type Environment} from './environment';
 import { LENGTH, LEG, stops, ground, road, start, advance, vehicles, type Vehicle } from './driving';
 
-export function mount(host: HTMLElement, report: (speed: number, progress: number, motion:Motion) => void, options: {paused:boolean; shadows:boolean; vehicle:Vehicle}) {
+export function mount(host: HTMLElement, report: (speed: number, progress: number, motion:Motion) => void, options: {
+  paused:boolean;shadows:boolean;vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
+  touch:Map<number,DriveAction>;reset:number;
+}) {
   const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
   const camera = new T.PerspectiveCamera(52,1,.15,850);
+  const titleCamera=new T.PerspectiveCamera(43,1,.15,850);
+  const displayCar=start();
   scene.add(new T.HemisphereLight('#dcecff','#b4906c',1.65));
   const sun = new T.DirectionalLight('#ffebcf',2.5); sun.shadow.mapSize.set(1024,1024); Object.assign(sun.shadow.camera,{left:-25,right:25,top:25,bottom:-25,far:110}); sun.shadow.normalBias=.045; scene.add(sun,sun.target);
   const sky = new T.Mesh(new T.SphereGeometry(780,24,12),new T.ShaderMaterial({
@@ -188,28 +194,68 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
   },undefined,error=>{console.error('Could not load the Long Chassis model',error);});
   const dust=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:'#dab584',size:.28,transparent:true,opacity:.35,depthWrite:false}));const particles=new Float32Array(90);dust.geometry.setAttribute('position',new T.BufferAttribute(particles,3));scene.add(dust);
   const keys=new Set<string>(); let car=start(),orbit=.29,zoom=6.7,last=performance.now(),lastReport=0,handle=0,drag=false;
-  const down=(event:KeyboardEvent)=>{if(isControl(event.target)){keys.clear();return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();keys.add(event.code); if(event.code==='KeyR')car=start();};const up=(event:KeyboardEvent)=>{keys.delete(event.code);};const blur=()=>{keys.clear();drag=false;};const pointer=(event:PointerEvent)=>{if(document.activeElement instanceof HTMLElement)document.activeElement.blur();drag=true;renderer.domElement.setPointerCapture(event.pointerId);};const release=()=>{drag=false;};const move=(event:PointerEvent)=>{if(drag)orbit-=event.movementX*.007;}; const wheel=(event:WheelEvent)=>{event.preventDefault();zoom=T.MathUtils.clamp(zoom+event.deltaY*.01,4,15);};
+  const down=(event:KeyboardEvent)=>{if(options.paused||isControl(event.target)){keys.clear();return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();keys.add(event.code); if(event.code==='KeyR')car=start();};const up=(event:KeyboardEvent)=>{keys.delete(event.code);};const blur=()=>{keys.clear();drag=false;};const pointer=(event:PointerEvent)=>{if(options.title)return;if(document.activeElement instanceof HTMLElement)document.activeElement.blur();drag=true;renderer.domElement.setPointerCapture(event.pointerId);};const release=()=>{drag=false;};const move=(event:PointerEvent)=>{if(drag)orbit-=event.movementX*.007;}; const wheel=(event:WheelEvent)=>{if(options.title)return;event.preventDefault();zoom=T.MathUtils.clamp(zoom+event.deltaY*.01,4,15);};
   const listeners=new AbortController(), signal=listeners.signal; window.addEventListener('keydown',down,{signal});window.addEventListener('keyup',up,{signal});window.addEventListener('blur',blur,{signal});renderer.domElement.addEventListener('pointerdown',pointer,{signal});renderer.domElement.addEventListener('lostpointercapture',release,{signal});renderer.domElement.addEventListener('pointermove',move,{signal});renderer.domElement.addEventListener('wheel',wheel,{signal,passive:false});
-  const resize=()=>{const width=host.clientWidth,height=host.clientHeight;if(!width||!height)return;renderer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(host);resize();const target=new T.Vector3(), desired=new T.Vector3();let first=true;
+  let pixelRatio=options.mobile?Math.min(1,devicePixelRatio):Math.min(1.5,devicePixelRatio);
+  let frameAverage=16,qualityCheck=performance.now();
+  const resize=()=>{
+    const width=host.clientWidth,height=host.clientHeight;
+    if(!width||!height)return;
+    renderer.setPixelRatio(pixelRatio);renderer.setSize(width,height);
+    camera.aspect=titleCamera.aspect=width/height;camera.updateProjectionMatrix();
+    titleCamera.setViewOffset(width,height,width<height?0:-width*.235,width<height?height*.17:0,width,height);
+  };
+  const observer=new ResizeObserver(resize);observer.observe(host);resize();
+  const target=new T.Vector3(),desired=new T.Vector3();let first=true,previousTitle=options.title,reset=options.reset;
   let activeVehicle=options.vehicle;
-  function frame(now:number){const dt=Math.min(.045,(now-last)/1000);last=now;
+  function frame(now:number){const elapsed=now-last,dt=Math.min(.045,elapsed/1000);last=now;
+    if(options.mobile&&!document.hidden){
+      frameAverage+=.055*(Math.min(elapsed,150)-frameAverage);
+      if(now-qualityCheck>2400){
+        const ratio=frameAverage>34?Math.max(.6,pixelRatio-.12):frameAverage<23?Math.min(1,devicePixelRatio,pixelRatio+.08):pixelRatio;
+        if(ratio!==pixelRatio){pixelRatio=ratio;resize();}
+        qualityCheck=now;
+      }
+    }
+    if(previousTitle!==options.title){previousTitle=options.title;first=true;}
+    if(reset!==options.reset){reset=options.reset;car=start();first=true;options.touch.clear();}
     if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;}
-    const steer=+(keys.has('KeyD')||keys.has('ArrowRight'))-+(keys.has('KeyA')||keys.has('ArrowLeft'));
-    if(!options.paused)advance(car,dt,{throttle:keys.has('KeyW')||keys.has('ArrowUp'),reverse:keys.has('KeyS')||keys.has('ArrowDown'),steer,brake:keys.has('Space')},activeVehicle);
-    stream(car.position);
-    const {model,tires}=fleet[activeVehicle];
+    const touch=[...options.touch.values()];
+    const steer=+(keys.has('KeyD')||keys.has('ArrowRight')||touch.includes('right'))-+(keys.has('KeyA')||keys.has('ArrowLeft')||touch.includes('left'));
+    const throttle=keys.has('KeyW')||keys.has('ArrowUp')||touch.includes('throttle');
+    const reverse=keys.has('KeyS')||keys.has('ArrowDown')||touch.includes('reverse');
+    const parked=options.title;
+    if(!options.paused&&!document.hidden)advance(car,dt,{throttle,reverse,steer,brake:keys.has('Space')||touch.includes('brake')},activeVehicle);
+    const shown=parked?displayCar:car;
+    stream(shown.position);
+    const {model,tires}=fleet[parked?'jeep':activeVehicle];
     for(const entry of Object.values(fleet))entry.model.visible=entry.model===model;
-    const y=ground(car.lateral,car.position);model.position.set(car.lateral,y,-car.position);model.rotation.set(0,-car.heading,activeVehicle==='unique'&&!options.paused?-steer*Math.min(.35,Math.abs(car.speed)*.025):0,'YXZ');
+    const y=ground(shown.lateral,shown.position);model.position.set(shown.lateral,y,-shown.position);model.rotation.set(0,-shown.heading,activeVehicle==='unique'&&!options.paused?-steer*Math.min(.35,Math.abs(car.speed)*.025):0,'YXZ');
     if(!options.paused)for(const tire of tires)tire.rotation.x-=car.speed*dt/vehicles[activeVehicle].radius;
+    if(parked){
+      const drift=options.reducedMotion||options.mobile?0:Math.sin(now*.00025)*.14;
+      const angle=shown.heading+.8+drift*.23;
+      const distance=titleCamera.aspect<1?8.7:7.1;
+      titleCamera.position.set(shown.lateral-Math.sin(angle)*distance,y+2.0+drift,-shown.position+Math.cos(angle)*distance);
+      titleCamera.lookAt(shown.lateral,y+.98,-shown.position);
+    }else{
     const angle=car.heading+orbit;
     desired.set(car.lateral-Math.sin(angle)*zoom,y+1.05+zoom*.27,-car.position+Math.cos(angle)*zoom);
     desired.y=Math.max(desired.y,ground(desired.x,-desired.z)+.85);
     camera.position.lerp(desired,first?1:1-Math.exp(-dt*6));
     desired.set(car.lateral+Math.sin(car.heading)*1.6,y+1.22,-car.position-Math.cos(car.heading)*1.6);
-    target.lerp(desired,first?1:1-Math.exp(-dt*9));first=false;camera.lookAt(target);sky.position.copy(camera.position);
-    sun.position.set(car.lateral-27,y+34,-car.position-19);sun.target.position.copy(model.position); sun.castShadow=options.shadows;
-    dust.visible=Math.abs(car.speed)>3; if(dust.visible){for(let index=0;index<30;index++){const phase=(now*.001+index/30)%1, trail=1.5+phase*6;particles[index*3]=car.lateral-Math.sin(car.heading)*trail+Math.sin(index*51)*phase;particles[index*3+1]=y+.2+phase*.7;particles[index*3+2]=-car.position+Math.cos(car.heading)*trail;}dust.geometry.attributes.position.needsUpdate=true;dust.frustumCulled=false;}
-    renderer.render(scene,camera); if(now-lastReport>100){const speed=Math.abs(car.speed)*3.6;report(speed,car.position/LENGTH,{speed,throttle:keys.has('KeyW')||keys.has('ArrowUp')||keys.has('KeyS')||keys.has('ArrowDown'),sand:Math.abs(car.lateral-road(car.position))>4});lastReport=now;}handle=requestAnimationFrame(frame);}
+    target.lerp(desired,first?1:1-Math.exp(-dt*9));first=false;camera.lookAt(target);
+    }
+    const view=parked?titleCamera:camera;
+    sky.position.copy(view.position);
+    sun.position.set(shown.lateral-(parked?37:27),y+(parked?26:34),-shown.position-19);
+    sun.color.set(parked?'#ffe0b5':'#ffebcf');
+    sun.target.position.copy(model.position);sun.castShadow=options.shadows;
+    dust.visible=!parked&&Math.abs(car.speed)>3; if(dust.visible){for(let index=0;index<30;index++){const phase=(now*.001+index/30)%1, trail=1.5+phase*6;particles[index*3]=car.lateral-Math.sin(car.heading)*trail+Math.sin(index*51)*phase;particles[index*3+1]=y+.2+phase*.7;particles[index*3+2]=-car.position+Math.cos(car.heading)*trail;}dust.geometry.attributes.position.needsUpdate=true;dust.frustumCulled=false;}
+    renderer.render(scene,view);
+    if(now-lastReport>100){const speed=Math.abs(car.speed)*3.6;report(speed,car.position/LENGTH,{speed,throttle:throttle||reverse,sand:Math.abs(car.lateral-road(car.position))>4});lastReport=now;}
+    handle=requestAnimationFrame(frame);
+  }
   handle=requestAnimationFrame(frame);
   return ()=>{disposed=true;cancelAnimationFrame(handle);observer.disconnect();listeners.abort();dispose(scene);if(environment)disposeEnvironment(environment);sand.dispose();asphalt.dispose();sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
 }
