@@ -1,9 +1,11 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import type {Motion} from './gameAudio';
+import {isControl} from './Radio';
 import {decorate,disposeEnvironment,loadEnvironment,type Environment} from './environment';
 import { LENGTH, LEG, stops, ground, road, start, advance, vehicles, type Vehicle } from './driving';
 
-export function mount(host: HTMLElement, report: (speed: number, progress: number) => void, options: {paused:boolean; shadows:boolean; vehicle:Vehicle}) {
+export function mount(host: HTMLElement, report: (speed: number, progress: number, motion:Motion) => void, options: {paused:boolean; shadows:boolean; vehicle:Vehicle}) {
   const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
   const camera = new T.PerspectiveCamera(52,1,.15,850);
@@ -186,7 +188,7 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
   },undefined,error=>{console.error('Could not load the Long Chassis model',error);});
   const dust=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:'#dab584',size:.28,transparent:true,opacity:.35,depthWrite:false}));const particles=new Float32Array(90);dust.geometry.setAttribute('position',new T.BufferAttribute(particles,3));scene.add(dust);
   const keys=new Set<string>(); let car=start(),orbit=.29,zoom=6.7,last=performance.now(),lastReport=0,handle=0,drag=false;
-  const down=(event:KeyboardEvent)=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();keys.add(event.code); if(event.code==='KeyR')car=start();};const up=(event:KeyboardEvent)=>{keys.delete(event.code);};const blur=()=>{keys.clear();drag=false;};const pointer=(event:PointerEvent)=>{drag=true;renderer.domElement.setPointerCapture(event.pointerId);};const release=()=>{drag=false;};const move=(event:PointerEvent)=>{if(drag)orbit-=event.movementX*.007;}; const wheel=(event:WheelEvent)=>{event.preventDefault();zoom=T.MathUtils.clamp(zoom+event.deltaY*.01,4,15);};
+  const down=(event:KeyboardEvent)=>{if(isControl(event.target)){keys.clear();return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();keys.add(event.code); if(event.code==='KeyR')car=start();};const up=(event:KeyboardEvent)=>{keys.delete(event.code);};const blur=()=>{keys.clear();drag=false;};const pointer=(event:PointerEvent)=>{if(document.activeElement instanceof HTMLElement)document.activeElement.blur();drag=true;renderer.domElement.setPointerCapture(event.pointerId);};const release=()=>{drag=false;};const move=(event:PointerEvent)=>{if(drag)orbit-=event.movementX*.007;}; const wheel=(event:WheelEvent)=>{event.preventDefault();zoom=T.MathUtils.clamp(zoom+event.deltaY*.01,4,15);};
   const listeners=new AbortController(), signal=listeners.signal; window.addEventListener('keydown',down,{signal});window.addEventListener('keyup',up,{signal});window.addEventListener('blur',blur,{signal});renderer.domElement.addEventListener('pointerdown',pointer,{signal});renderer.domElement.addEventListener('lostpointercapture',release,{signal});renderer.domElement.addEventListener('pointermove',move,{signal});renderer.domElement.addEventListener('wheel',wheel,{signal,passive:false});
   const resize=()=>{const width=host.clientWidth,height=host.clientHeight;if(!width||!height)return;renderer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(host);resize();const target=new T.Vector3(), desired=new T.Vector3();let first=true;
   let activeVehicle=options.vehicle;
@@ -207,7 +209,7 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
     target.lerp(desired,first?1:1-Math.exp(-dt*9));first=false;camera.lookAt(target);sky.position.copy(camera.position);
     sun.position.set(car.lateral-27,y+34,-car.position-19);sun.target.position.copy(model.position); sun.castShadow=options.shadows;
     dust.visible=Math.abs(car.speed)>3; if(dust.visible){for(let index=0;index<30;index++){const phase=(now*.001+index/30)%1, trail=1.5+phase*6;particles[index*3]=car.lateral-Math.sin(car.heading)*trail+Math.sin(index*51)*phase;particles[index*3+1]=y+.2+phase*.7;particles[index*3+2]=-car.position+Math.cos(car.heading)*trail;}dust.geometry.attributes.position.needsUpdate=true;dust.frustumCulled=false;}
-    renderer.render(scene,camera); if(now-lastReport>100){report(Math.abs(car.speed)*3.6,car.position/LENGTH);lastReport=now;}handle=requestAnimationFrame(frame);}
+    renderer.render(scene,camera); if(now-lastReport>100){const speed=Math.abs(car.speed)*3.6;report(speed,car.position/LENGTH,{speed,throttle:keys.has('KeyW')||keys.has('ArrowUp')||keys.has('KeyS')||keys.has('ArrowDown'),sand:Math.abs(car.lateral-road(car.position))>4});lastReport=now;}handle=requestAnimationFrame(frame);}
   handle=requestAnimationFrame(frame);
   return ()=>{disposed=true;cancelAnimationFrame(handle);observer.disconnect();listeners.abort();dispose(scene);if(environment)disposeEnvironment(environment);sand.dispose();asphalt.dispose();sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
 }
