@@ -4,6 +4,7 @@ import {mount} from './scene';
 import {checkpoints,stops,vehicles,type Vehicle} from './driving';
 import {createGameAudio,defaults,preference,savePreference,type AudioSettings,type Motion} from './gameAudio';
 import {isControl,Radio,shortcuts,type Shortcuts} from './Radio';
+import {Credits} from './Credits';
 import {RotateScreen,TouchDrive,touchDevice,useMedia,type DriveAction} from './TouchDrive';
 import '@fontsource-variable/manrope';
 import './style.css';
@@ -38,7 +39,7 @@ function App(){
  options.current.paused=menu!==''||rotate;
  options.current.shadows=shadows;
  options.current.vehicle=vehicle;
- options.current.title=menu==='home';
+ options.current.title=menu==='home'||menu==='credits';
  options.current.mobile=mobile;
  options.current.reducedMotion=reducedMotion;
  options.current.recenter=recenter;
@@ -107,7 +108,7 @@ function App(){
       <button className="start-journey" onClick={enter}>start journey</button>
       <nav className="title-nav" aria-label="Main menu">{['Garage','Settings','Credits'].map(label=><button key={label} onClick={()=>setMenu(label.toLowerCase())}>{label}</button>)}</nav>
     </div>
-  </section>:menu?<section className="panel">
+  </section>:menu==='credits'?<Credits back={()=>setMenu('home')}/>:menu?<section className="panel">
    <small>THAR DESERT / UMERKOT TO SAEEDAU</small><h1>Saeedau<span>Beyond the Dunes</span></h1>
    {menu==='settings'&&<label><input type="checkbox" checked={shadows} onChange={event=>{setShadows(event.target.checked);localStorage.setItem('saeedau.shadows',String(event.target.checked));}}/> Dynamic shadows</label>}
    {menu==='settings'&&<p><label><input type="checkbox" checked={recenter} onChange={event=>{setRecenter(event.target.checked);savePreference('camera.recenter',event.target.checked);}}/> Recenter chase camera after orbiting</label></p>}
@@ -131,7 +132,6 @@ function App(){
     </details>
    </fieldset>}
    {menu==='garage'&&<nav aria-label="Vehicle selection">{(Object.keys(vehicles) as Vehicle[]).map(key=><button key={key} aria-pressed={vehicle===key} onClick={()=>setVehicle(key)}>{vehicles[key].name}</button>)}</nav>}
-   {menu==='credits'&&<p>An independent driving game set in Pakistan’s Thar Desert. The route is condensed and fictionalized, not intended for navigation.</p>}
    <nav>{menu==='pause'?<><button onClick={enter}>Resume</button>{['Garage','Settings','Credits'].map(label=><button key={label} onClick={()=>setMenu(label.toLowerCase())}>{label}</button>)}</>:<button onClick={()=>setMenu('home')}>Back</button>}</nav>
   </section>:<>
    <aside className="hud" aria-label="Driving dashboard">
