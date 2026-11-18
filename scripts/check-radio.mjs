@@ -17,6 +17,7 @@ try {
   browser=await chromium.launch({channel:'msedge',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   const page=await browser.newPage({viewport:{width:1120,height:720}});
   const faults=[];page.on('pageerror',error=>faults.push(error.message));
+  page.on('requestfailed',request=>{if(request.url().includes('youtube'))console.log('YouTube request:',request.failure()?.errorText, new URL(request.url()).pathname);});
   const button=name=>page.getByRole('button',{name,exact:true});
   const media=()=>page.locator('audio').evaluate(audio=>({paused:audio.paused,time:audio.currentTime,volume:audio.volume}));
   await page.goto('http://127.0.0.1:5173');
@@ -51,14 +52,19 @@ try {
     console.log('Live YouTube playback unverified: '+(await page.locator('.radio [role=status]').allTextContents()).join(' ')+' '+error.message.split('\n')[0]);
   }
   await button('Collapse').click();await expect(page.locator('.radio-embed iframe')).toHaveCount(0);
-  await button('Expand').click();await button('My Music').click();
+  await button('Expand').click();
+  await expect(page.locator('.radio-embed iframe')).toHaveCount(1,{timeout:14000});
+  await page.screenshot({path:'artifacts/fix-radio-expanded.png'});
+  await button('My Music').click();
+  await expect(page.locator('.radio-embed iframe')).toHaveCount(0);
   await expect(button('Dune-two')).toHaveAttribute('aria-current','true');
   await button('Play music').click();
   await button('Back').click();await button('start journey').click();
   await expect(button('Pause music')).toBeVisible();
-  await page.screenshot({path:'artifacts/radio-expanded.png'});
+  await page.screenshot({path:'artifacts/fix-local-expanded.png'});
   await button('Collapse').click();
-  await page.screenshot({path:'artifacts/radio-compact.png'});
+  await expect.poll(async()=>(await media()).paused).toBe(false);
+  await page.screenshot({path:'artifacts/fix-radio-compact.png'});
   await page.mouse.click(620,320);await page.keyboard.press('m');
   await expect(button('Collapse')).toBeVisible();
   await button('Remove Dune-one').click();await expect(button('Dune-one')).toHaveCount(0);

@@ -4,11 +4,11 @@ import type {Motion} from './gameAudio';
 import type {DriveAction} from './TouchDrive';
 import {isControl} from './Radio';
 import {decorate,disposeEnvironment,loadEnvironment,type Environment} from './environment';
-import { LENGTH, LEG, stops, ground, road, start, advance, vehicles, type Vehicle } from './driving';
+import { LENGTH, LEG, stops, ground, road, start, advance, vehicles, chaseProfiles, dampHeading, type Vehicle } from './driving';
 
 export function mount(host: HTMLElement, report: (speed: number, progress: number, motion:Motion) => void, options: {
   paused:boolean;shadows:boolean;vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
-  touch:Map<number,DriveAction>;reset:number;
+  touch:Map<number,DriveAction>;reset:number;recenter:boolean;
 }) {
   const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
@@ -193,9 +193,41 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
     fleet.jeep={model,tires};
   },undefined,error=>{console.error('Could not load the Long Chassis model',error);});
   const dust=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:'#dab584',size:.28,transparent:true,opacity:.35,depthWrite:false}));const particles=new Float32Array(90);dust.geometry.setAttribute('position',new T.BufferAttribute(particles,3));scene.add(dust);
-  const keys=new Set<string>(); let car=start(),orbit=.29,zoom=6.7,last=performance.now(),lastReport=0,handle=0,drag=false;
-  const down=(event:KeyboardEvent)=>{if(options.paused||isControl(event.target)){keys.clear();return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();keys.add(event.code); if(event.code==='KeyR')car=start();};const up=(event:KeyboardEvent)=>{keys.delete(event.code);};const blur=()=>{keys.clear();drag=false;};const pointer=(event:PointerEvent)=>{if(options.title)return;if(document.activeElement instanceof HTMLElement)document.activeElement.blur();drag=true;renderer.domElement.setPointerCapture(event.pointerId);};const release=()=>{drag=false;};const move=(event:PointerEvent)=>{if(drag)orbit-=event.movementX*.007;}; const wheel=(event:WheelEvent)=>{if(options.title)return;event.preventDefault();zoom=T.MathUtils.clamp(zoom+event.deltaY*.01,4,15);};
-  const listeners=new AbortController(), signal=listeners.signal; window.addEventListener('keydown',down,{signal});window.addEventListener('keyup',up,{signal});window.addEventListener('blur',blur,{signal});renderer.domElement.addEventListener('pointerdown',pointer,{signal});renderer.domElement.addEventListener('lostpointercapture',release,{signal});renderer.domElement.addEventListener('pointermove',move,{signal});renderer.domElement.addEventListener('wheel',wheel,{signal,passive:false});
+  const keys=new Set<string>();
+  let car=start(),orbit=0,zoom=0,last=performance.now(),lastReport=0,handle=0;
+  let drag:number|undefined,returnAfter=0,followHeading=car.heading,followHeight=0;
+  const down=(event:KeyboardEvent)=>{
+    if(options.paused||isControl(event.target)){keys.clear();return;}
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();
+    keys.add(event.code);
+    if(event.code==='KeyR'&&!event.repeat)options.reset++;
+  };
+  const up=(event:KeyboardEvent)=>keys.delete(event.code);
+  const release=(event?:PointerEvent)=>{
+    if(event&&drag!==event.pointerId)return;
+    drag=undefined;returnAfter=performance.now()+950;
+  };
+  const blur=()=>{keys.clear();release();};
+  const pointer=(event:PointerEvent)=>{
+    if(options.paused||drag!==undefined||event.button!==0)return;
+    if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
+    drag=event.pointerId;renderer.domElement.setPointerCapture(event.pointerId);
+  };
+  const move=(event:PointerEvent)=>{
+    if(event.pointerId===drag){orbit-=event.movementX*.007;orbit=Math.atan2(Math.sin(orbit),Math.cos(orbit));}
+  };
+  const wheel=(event:WheelEvent)=>{
+    if(options.paused)return;
+    event.preventDefault();zoom=T.MathUtils.clamp(zoom+event.deltaY*.009,-4,7);
+  };
+  const listeners=new AbortController(),signal=listeners.signal;
+  window.addEventListener('keydown',down,{signal});window.addEventListener('keyup',up,{signal});window.addEventListener('blur',blur,{signal});
+  renderer.domElement.addEventListener('pointerdown',pointer,{signal});
+  renderer.domElement.addEventListener('pointerup',release,{signal});
+  renderer.domElement.addEventListener('pointercancel',release,{signal});
+  renderer.domElement.addEventListener('lostpointercapture',release,{signal});
+  renderer.domElement.addEventListener('pointermove',move,{signal});
+  renderer.domElement.addEventListener('wheel',wheel,{signal,passive:false});
   let pixelRatio=options.mobile?Math.min(1,devicePixelRatio):Math.min(1.5,devicePixelRatio);
   let frameAverage=16,qualityCheck=performance.now();
   const resize=()=>{
@@ -206,9 +238,10 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
     titleCamera.setViewOffset(width,height,width<height?0:-width*.235,width<height?height*.17:0,width,height);
   };
   const observer=new ResizeObserver(resize);observer.observe(host);resize();
-  const target=new T.Vector3(),desired=new T.Vector3();let first=true,previousTitle=options.title,reset=options.reset;
+  const target=new T.Vector3();let first=true,previousTitle=options.title,reset=options.reset;
   let activeVehicle=options.vehicle;
   function frame(now:number){const elapsed=now-last,dt=Math.min(.045,elapsed/1000);last=now;
+    const cameraDt=elapsed/1000;
     if(options.mobile&&!document.hidden){
       frameAverage+=.055*(Math.min(elapsed,150)-frameAverage);
       if(now-qualityCheck>2400){
@@ -218,8 +251,8 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
       }
     }
     if(previousTitle!==options.title){previousTitle=options.title;first=true;}
-    if(reset!==options.reset){reset=options.reset;car=start();first=true;options.touch.clear();}
-    if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;}
+    if(reset!==options.reset){reset=options.reset;car=start();first=true;orbit=zoom=0;keys.clear();release();options.touch.clear();}
+    if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;first=true;orbit=zoom=0;release();}
     const touch=[...options.touch.values()];
     const steer=+(keys.has('KeyD')||keys.has('ArrowRight')||touch.includes('right'))-+(keys.has('KeyA')||keys.has('ArrowLeft')||touch.includes('left'));
     const throttle=keys.has('KeyW')||keys.has('ArrowUp')||touch.includes('throttle');
@@ -239,12 +272,24 @@ export function mount(host: HTMLElement, report: (speed: number, progress: numbe
       titleCamera.position.set(shown.lateral-Math.sin(angle)*distance,y+2.0+drift,-shown.position+Math.cos(angle)*distance);
       titleCamera.lookAt(shown.lateral,y+.98,-shown.position);
     }else{
-    const angle=car.heading+orbit;
-    desired.set(car.lateral-Math.sin(angle)*zoom,y+1.05+zoom*.27,-car.position+Math.cos(angle)*zoom);
-    desired.y=Math.max(desired.y,ground(desired.x,-desired.z)+.85);
-    camera.position.lerp(desired,first?1:1-Math.exp(-dt*6));
-    desired.set(car.lateral+Math.sin(car.heading)*1.6,y+1.22,-car.position-Math.cos(car.heading)*1.6);
-    target.lerp(desired,first?1:1-Math.exp(-dt*9));first=false;camera.lookAt(target);
+      if(options.recenter&&drag===undefined&&now>=returnAfter){
+        orbit*=Math.exp(-Math.min(cameraDt,(now-returnAfter)/1000)*4);
+      }
+      followHeading=first?car.heading:dampHeading(followHeading,car.heading,cameraDt);
+      const angle=followHeading+orbit,forwardX=Math.sin(angle),forwardZ=-Math.cos(angle);
+      const profile=chaseProfiles[activeVehicle],distance=Math.max(profile.min,profile.distance+zoom);
+      const x=car.lateral-forwardX*distance,z=-car.position-forwardZ*distance;
+      const targetY=y+profile.target;
+      let clearance=ground(x,-z)+.85;
+      for(const fraction of [.25,.5,.75]){
+        const terrain=ground(T.MathUtils.lerp(car.lateral,x,fraction),T.MathUtils.lerp(car.position,-z,fraction));
+        clearance=Math.max(clearance,targetY+(terrain+.5-targetY)/fraction);
+      }
+      const height=Math.max(clearance,y+profile.height+(distance-profile.distance)*.22);
+      followHeight=first?height:T.MathUtils.damp(followHeight,height,9,cameraDt);
+      camera.position.set(x,Math.max(clearance,followHeight),z);
+      target.set(car.lateral+forwardX*3.1,targetY,-car.position+forwardZ*3.1);
+      camera.lookAt(target);first=false;
     }
     const view=parked?titleCamera:camera;
     sky.position.copy(view.position);

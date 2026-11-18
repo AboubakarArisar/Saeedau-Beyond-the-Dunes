@@ -1,13 +1,14 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {mount} from './scene';
-import {stops,vehicles,type Vehicle} from './driving';
+import {LEG,LENGTH,stops,vehicles,type Vehicle} from './driving';
 import {createGameAudio,defaults,preference,savePreference,type AudioSettings,type Motion} from './gameAudio';
 import {isControl,Radio,shortcuts,type Shortcuts} from './Radio';
 import {RotateScreen,TouchDrive,touchDevice,useMedia,type DriveAction} from './TouchDrive';
 import '@fontsource-variable/manrope';
 import './style.css';
 import './title.css';
+import './hud.css';
 
 function App(){
  const host=useRef<HTMLDivElement>(null);
@@ -16,10 +17,13 @@ function App(){
  const [failed,setFailed]=useState(false);
  const [vehicle,setVehicle]=useState<Vehicle>('jeep');
  const [leg,setLeg]=useState(0);
+ const [remaining,setRemaining]=useState(LEG);
+ const [recenter,setRecenter]=useState(()=>preference('camera.recenter',true));
+ const [controls,setControls]=useState(false);
  const mobile=useMedia(touchDevice),portrait=useMedia('(orientation: portrait)');
  const reducedMotion=useMedia('(prefers-reduced-motion: reduce)');
  const [portraitOverride,setPortraitOverride]=useState(false);
- const rotate=mobile&&portrait&&!portraitOverride;
+ const rotate=mobile&&portrait&&!portraitOverride&&!menu&&!failed;
  const touch=useRef(new Map<number,DriveAction>());
  const [shadows,setShadows]=useState(()=>preference('shadows',!matchMedia(touchDevice).matches));
  const [settings,setSettings]=useState(()=>({...defaults,...preference('audio',defaults)}));
@@ -27,18 +31,18 @@ function App(){
  const [keyError,setKeyError]=useState('');
  const sound=useRef<ReturnType<typeof createGameAudio>|null>(null);
  const motion=useRef<Motion>({speed:0,sand:false,throttle:false});
- const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0});
+ const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,recenter});
  options.current.paused=menu!==''||rotate;
  options.current.shadows=shadows;
  options.current.vehicle=vehicle;
  options.current.title=menu==='home';
  options.current.mobile=mobile;
  options.current.reducedMotion=reducedMotion;
+ options.current.recenter=recenter;
  useEffect(()=>{
   if(!portrait)setPortraitOverride(false);
   touch.current.clear();
-  if(rotate)setMenu(current=>current||'pause');
- },[rotate,portrait]);
+ },[portrait]);
  useEffect(()=>{
   const pause=()=>{touch.current.clear();if(mobile)setMenu(current=>current||'pause');};
   const hidden=()=>{if(document.hidden)pause();};
@@ -47,7 +51,7 @@ function App(){
    touch.current.clear();
    clearTimeout(timer);
    timer=window.setTimeout(()=>{
-    if(document.hidden||!document.activeElement?.matches('[data-radio] iframe'))pause();
+    if(document.hidden||(!document.activeElement?.closest('.rotate-screen')&&!document.activeElement?.matches('[data-radio] iframe')))pause();
    },0);
   };
   window.addEventListener('blur',blur);document.addEventListener('visibilitychange',hidden);
@@ -57,6 +61,8 @@ function App(){
   motion.current=telemetry;
   setStats([Math.round(speed),Math.floor(progress*100)]);
   setLeg(Math.floor(progress*(stops.length-1)));
+  const position=progress*LENGTH;
+  setRemaining(Math.ceil(Math.max(0,Math.min(LENGTH,(Math.floor(position/LEG)+1)*LEG)-position)));
  },options.current);}catch(error){console.error(error);setFailed(true);}},[]);
  useEffect(()=>{const key=(event:KeyboardEvent)=>{if(event.code==='Escape'&&!event.repeat&&!isControl(event.target))setMenu(current=>current?'':'pause');}; window.addEventListener('keydown',key);return ()=>window.removeEventListener('keydown',key);},[]);
  useEffect(()=>{savePreference('audio',settings);savePreference('radio.keys',bindings);},[settings,bindings]);
@@ -90,6 +96,7 @@ function App(){
   </section>:menu?<section className="panel">
    <small>THAR DESERT / UMERKOT TO SAEEDAU</small><h1>Saeedau<span>Beyond the Dunes</span></h1>
    {menu==='settings'&&<label><input type="checkbox" checked={shadows} onChange={event=>{setShadows(event.target.checked);localStorage.setItem('saeedau.shadows',String(event.target.checked));}}/> Dynamic shadows</label>}
+   {menu==='settings'&&<p><label><input type="checkbox" checked={recenter} onChange={event=>{setRecenter(event.target.checked);savePreference('camera.recenter',event.target.checked);}}/> Recenter chase camera after orbiting</label></p>}
    {menu==='settings'&&<fieldset className="audio-settings"><legend>Audio</legend>
     {(['master','music','engine','environment'] as const).map(key=><label key={key}>{key[0].toUpperCase()+key.slice(1)} volume
      <input type="range" min="0" max="1" step=".01" value={settings[key]} onChange={event=>adjust(key,Number(event.target.value))}/>
@@ -113,10 +120,20 @@ function App(){
    {menu==='credits'&&<p>An independent driving game set in Pakistan’s Thar Desert. The route is condensed and fictionalized, not intended for navigation.</p>}
    <nav>{menu==='pause'?<><button onClick={enter}>Resume</button>{['Garage','Settings','Credits'].map(label=><button key={label} onClick={()=>setMenu(label.toLowerCase())}>{label}</button>)}</>:<button onClick={()=>setMenu('home')}>Back</button>}</nav>
   </section>:<>
-   <aside className="hud"><small>{vehicles[vehicle].name}</small><strong>{stats[0]}</strong> km/h <progress aria-label="Journey progress" value={stats[1]} max="100"/><small className={leg===stops.length-1?'arrival-label':undefined}>{leg===stops.length-1?'Arrived in Saeedau':`${stops[leg]} → ${stops[leg+1]}`}</small><small>{stats[1]}% OF ROUTE</small></aside>
+   <aside className="hud" aria-label="Driving dashboard">
+    <div className="hud-speed"><strong>{stats[0]}</strong><span>km/h</span></div>
+    <small className="hud-vehicle">{vehicles[vehicle].name}</small>
+    <div className="hud-route">
+     <span className={leg===stops.length-1?'arrival-label':undefined}>{leg===stops.length-1?'Arrived in Saeedau':`${stops[leg]} → ${stops[leg+1]}`}</span>
+     <span className="hud-distance">{leg===stops.length-1?'Journey complete':`${remaining>=1000?(remaining/1000).toFixed(1)+' km':remaining+' m'} to ${stops[leg+1]}`}</span>
+     <div className="hud-progress"><progress aria-label="Journey progress" value={stats[1]} max="100"/><span>{stats[1]}%</span></div>
+    </div>
+   </aside>
    <button className="pause" onClick={()=>setMenu('pause')}>Pause</button>
    {mobile?<TouchDrive inputs={touch.current} reset={()=>{options.current.reset++;}}/>:
-    <aside className="keys">WASD / arrows · Space handbrake · Drag to orbit · Scroll to zoom · R reset</aside>}
+    <aside className="drive-help"><button aria-expanded={controls} onClick={()=>setControls(!controls)}>{controls?'Hide controls':'Controls'}</button>
+      {controls&&<p>WASD or arrows to drive · Space handbrake · Drag to orbit · Scroll to zoom · R reset · Esc pause</p>}
+    </aside>}
   </>}
   <Radio visible={!failed&&!rotate&&(!menu||menu==='garage')} volume={settings.mute?0:settings.master*settings.music} music={settings.music}
    setMusic={value=>adjust('music',value)} bindings={bindings}/>

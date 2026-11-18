@@ -1,0 +1,16 @@
+.hud,.touch-layout .hud{padding:0;background:none;gap:0;text-shadow:0 1px 3px #000}
+.hud-speed{display:flex;align-items:baseline;gap:8px;width:max-content;border-radius:12px 12px 12px 2px;background:#171716ed;padding:8px 16px}
+.hud-speed strong,.touch-layout .hud-speed strong{font-size:2.5rem}
+.hud-speed span,.hud-distance,.hud-progress{font-size:.75rem}
+.hud small.hud-vehicle{letter-spacing:0;color:#fff5df;margin:4px 0 8px;padding:2px 8px;border-radius:3px;background:#171716ed;width:max-content}
+.hud-route{display:grid;gap:2px;padding:8px 12px;border-radius:4px 12px 12px 12px;background:#171716ed;font-size:.875rem;font-weight:800}
+.hud-distance{color:#ffd2a0;font-weight:650}
+.hud-progress{display:flex;align-items:center;gap:8px}
+.hud-progress progress{height:5px;flex:1;min-width:56px}
+.pause,.touch-layout .pause{background:#171716ed;border-color:#fff5df66;border-radius:8px;font-size:.875rem}
+.drive-help{position:absolute;bottom:16px;left:16px;display:flex;flex-direction:column-reverse;gap:8px;max-width:min(350px,calc(100% - 32px))}
+.drive-help button{align-self:flex-start;background:#171716ed;border-color:#fff5df66;border-radius:8px;font-size:.75rem}
+.drive-help p{margin:0;padding:8px 12px;border-radius:8px;background:#171716ed;font-size:.875rem}
+.touch-layout .hud-speed{padding:4px 8px}
+.touch-layout .hud-speed strong{font-size:1.5rem}
+.touch-layout .hud-route{font-size:.75rem;padding:4px 8px}
