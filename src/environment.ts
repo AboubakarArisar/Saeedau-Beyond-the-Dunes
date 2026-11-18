@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {ground,checkpoints,development,road} from './driving';
+import {Colliders} from './collision';
 
 export async function loadEnvironment(){
   const loader=new GLTFLoader();
@@ -23,6 +24,23 @@ export async function loadEnvironment(){
 }
 
 export type Environment=Awaited<ReturnType<typeof loadEnvironment>>;
+const footprints=new WeakMap<T.BufferGeometry,{center:T.Vector3;size:T.Vector3}|null>();
+
+function footprint(geometry:T.BufferGeometry,base:boolean){
+  if(footprints.has(geometry))return footprints.get(geometry);
+  geometry.computeBoundingBox();
+  const bounds=geometry.boundingBox!;
+  const area=base?new T.Box3():bounds;
+  if(base){
+    const vertices=geometry.attributes.position,point=new T.Vector3();
+    for(let i=0;i<vertices.count;i++){
+      if(vertices.getY(i)<=.65)area.expandByPoint(point.fromBufferAttribute(vertices,i));
+    }
+  }
+  const shape=area.isEmpty()?null:{center:area.getCenter(new T.Vector3()),size:area.getSize(new T.Vector3())};
+  footprints.set(geometry,shape);
+  return shape;
+}
 
 export function disposeEnvironment(assets:Environment){
   const materials=new Set<T.Material>();
@@ -33,7 +51,7 @@ export function disposeEnvironment(assets:Environment){
   for(const material of materials)material.dispose();
 }
 
-export function decorate(group:T.Group, assets:Environment, from:number, to:number){
+export function decorate(group:T.Group, assets:Environment, from:number, to:number, colliders:Colliders){
   const matrices=new Map<string,T.Matrix4[]>();
   const nearMatrices=new Map<string,T.Matrix4[]>();
   const transform=new T.Object3D();
@@ -54,7 +72,7 @@ export function decorate(group:T.Group, assets:Environment, from:number, to:numb
   };
   for(let index=0;index<92;index++){
     const distance=from+random()*(to-from);
-    const offset=(random()<.5?-1:1)*(6.3+random()**1.8*146);
+    const offset=(random()<.5?-1:1)*(8.4+random()**1.8*146);
     if(offset>5&&offset<18&&checkpoints.some((anchor,index)=>{
       const sign=index===0?42:index===checkpoints.length-1?anchor+15:anchor-12;
       return distance>=sign-50&&distance<=sign+6;
@@ -131,7 +149,18 @@ export function decorate(group:T.Group, assets:Environment, from:number, to:numb
       if(!template)continue;
       const instances=new T.InstancedMesh(template.geometry,template.material,transforms.length);
       instances.userData.sharedEnvironment=true;
-      transforms.forEach((matrix,index)=>instances.setMatrixAt(index,matrix));
+      const shape=/^(Chounra|Market|TeaStall|Wall|Parked|Kandi|Khumbat|Utility|Streetlamp|Trough)/.test(name)?
+        footprint(template.geometry,/^(Kandi|Khumbat|Utility|Streetlamp)/.test(name)):null;
+      const world=new T.Vector3();
+      transforms.forEach((matrix,index)=>{
+        instances.setMatrixAt(index,matrix);
+        if(!shape)return;
+        const {center,size}=shape;
+        const elements=matrix.elements,scale=Math.hypot(elements[0],elements[2]);
+        world.copy(center).applyMatrix4(matrix);
+        colliders.add({x:world.x,z:world.z,width:size.x*scale/2,length:size.z*scale/2,
+          sin:-elements[2]/scale,cos:elements[0]/scale});
+      });
       instances.computeBoundingSphere();
       instances.castShadow=batch===nearMatrices;
       group.add(instances);

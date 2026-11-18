@@ -4,39 +4,64 @@ import type {Motion} from './gameAudio';
 import type {DriveAction} from './TouchDrive';
 import {isControl} from './Radio';
 import {decorate,disposeEnvironment,loadEnvironment,type Environment} from './environment';
-import { LENGTH, checkpoints, junction, stops, ground, road, start, advance, visit, vehicles, chaseProfiles, dampHeading, type Vehicle } from './driving';
+import { LENGTH, ROAD_WIDTH, checkpoints, junction, stops, ground, road, paved, start, advance, visit, vehicles, chaseProfiles, dampHeading, type Vehicle } from './driving';
+import {Colliders,moveThrough} from './collision';
+import {seasons,type Season} from './seasons';
+import {checkpoint,discover,newRun,places,tick,type Mode,type Run} from './run';
 
-export function mount(host: HTMLElement, report: (speed:number, position:number, checkpoint:number, progress:number, motion:Motion) => void, options: {
+export function mount(host: HTMLElement, report: (speed:number, position:number, progress:number, motion:Motion, run:Run) => void, options: {
   paused:boolean;shadows:boolean;vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
-  touch:Map<number,DriveAction>;reset:number;recenter:boolean;
+  touch:Map<number,DriveAction>;reset:number;recenter:boolean;season:Season;mode:Mode;preview:boolean;finish:boolean;
+  previewAngle:number;previewZoom:number;
 }) {
   const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
   const camera = new T.PerspectiveCamera(52,1,.15,850);
   const titleCamera=new T.PerspectiveCamera(43,1,.15,850);
+  const previewCamera=new T.PerspectiveCamera(47,1,.15,850);
   const displayCar=start();
-  scene.add(new T.HemisphereLight('#dcecff','#b4906c',1.65));
+  const previewDistance=152;
+  const previewCar={position:previewDistance,lateral:road(previewDistance),
+    heading:Math.atan2(road(previewDistance+1)-road(previewDistance-1),2)};
+  const ambient=new T.HemisphereLight('#dcecff','#b4906c',1.65);
+  scene.add(ambient);
   const sun = new T.DirectionalLight('#ffebcf',2.5); sun.shadow.mapSize.set(1024,1024); Object.assign(sun.shadow.camera,{left:-25,right:25,top:25,bottom:-25,far:110}); sun.shadow.normalBias=.045; scene.add(sun,sun.target);
   const sky = new T.Mesh(new T.SphereGeometry(780,24,12),new T.ShaderMaterial({
     side:T.BackSide,depthWrite:false,
+    uniforms:{horizon:{value:new T.Color()},zenith:{value:new T.Color()},glowStrength:{value:1},cloudCover:{value:0}},
     vertexShader:'varying vec3 direction; void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-    fragmentShader:`varying vec3 direction; void main(){
+    fragmentShader:`varying vec3 direction; uniform vec3 horizon,zenith; uniform float glowStrength,cloudCover; void main(){
       vec3 ray=normalize(direction);
       float height=max(ray.y,0.);
-      vec3 color=mix(vec3(.69,.72,.71),vec3(.24,.49,.72),smoothstep(0.,.45,height));
+      vec3 color=mix(horizon,zenith,smoothstep(0.,.45,height));
+      float clouds=sin(11.*ray.x+2.*sin(8.*ray.z))+sin(9.*ray.z-6.*ray.y)*.46;
+      color=mix(color,horizon*.72,cloudCover*smoothstep(-.15,.88,clouds)*smoothstep(.02,.26,height));
       float glow=pow(max(dot(ray,normalize(vec3(-.57,.43,-.70))),0.),12.);
-      gl_FragColor=vec4(color+vec3(.32,.19,.08)*glow,1.);
+      gl_FragColor=vec4(color+vec3(.32,.19,.08)*glow*glowStrength,1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
   }));scene.add(sky);
   function mesh(geometry:T.BufferGeometry,color:string,parent:T.Object3D=scene) {const item=new T.Mesh(geometry,new T.MeshStandardMaterial({color,roughness:.91})); item.receiveShadow=true; parent.add(item); return item;}
   const span=320, chunks=new Map<number,T.Group>();
+  const collisionChunks=new Map<number,Colliders>();
+  let currentSeason:Season|undefined;
+  const rainPoints=new Float32Array(180*6);
+  const rainGeometry=new T.BufferGeometry();
+  rainGeometry.setAttribute('position',new T.BufferAttribute(rainPoints,3).setUsage(T.DynamicDrawUsage));
+  const rain=new T.LineSegments(rainGeometry,new T.LineBasicMaterial({color:'#dcebf5',transparent:true,opacity:.33,depthWrite:false}));
+  rain.frustumCulled=false;rain.visible=false;scene.add(rain);
   let environment:Environment|undefined;
+  function tuneVegetation(season:Season){
+    for(const [name,plant] of environment??[])if(/^(Kandi|Khumbat|Karir|Khimp)/.test(name)){
+      plant.material.color.set(seasons[season].foliage);
+    }
+  }
   loadEnvironment().then(assets=>{
     if(disposed){disposeEnvironment(assets);return;}
     environment=assets;
-    for(const [key,group] of chunks)decorate(group,assets,key*span,(key+1)*span);
+    tuneVegetation(options.season);
+    for(const [key,group] of chunks)decorate(group,assets,key*span,(key+1)*span,collisionChunks.get(key)!);
     renderer.shadowMap.needsUpdate=true;
   }).catch(error=>console.error('Could not initialize Thar scenery',error));
   function surface(kind:'sand'|'asphalt'){
@@ -67,6 +92,8 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   const dispose=(root:T.Object3D)=>root.traverse(item=>{if(item instanceof T.InstancedMesh){item.dispose();if(item.userData.sharedEnvironment)return;}if(item instanceof T.Mesh||item instanceof T.Points||item instanceof T.LineSegments){item.geometry.dispose();for(const material of Array.isArray(item.material)?item.material:[item.material]){if(material.map&&material.map!==sand&&material.map!==asphalt)material.map.dispose();material.dispose();}}});
   function chunk(segment:number){
     const group=new T.Group(),from=segment*span,to=from+span;
+    const colliders=new Colliders();
+    collisionChunks.set(segment,colliders);
     const terrain=new T.PlaneGeometry(440,span,110,80);terrain.rotateX(-Math.PI/2);terrain.translate(0,0,-from-span/2);
     const points=terrain.attributes.position;
     const tint=new Float32Array(points.count*3);
@@ -81,19 +108,45 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     terrain.setAttribute('color',new T.BufferAttribute(tint,3));
     terrain.computeVertexNormals();
     const soil=mesh(terrain,'#ffffff',group);
+    soil.userData.land='soil';
+    soil.material.color.set(seasons[options.season].soil);
     soil.material.vertexColors=true;
     textureSurface(soil,sand,5.8);
     soil.material.bumpMap=sand;soil.material.bumpScale=.12;
+    if(from>=0&&from<LENGTH){
+      const grassGeometry=new T.BufferGeometry();
+      grassGeometry.setAttribute('position',new T.Float32BufferAttribute([
+        -.1,0,0,.04,0,0,-.16,.38,.02, -.04,0,0,.09,0,0,.12,.54,.04,
+        0,0,-.08,0,0,.08,.05,.45,-.16,
+      ],3));
+      grassGeometry.computeVertexNormals();
+      const grass=new T.InstancedMesh(grassGeometry,new T.MeshStandardMaterial({side:T.DoubleSide,color:'#818e49'}),128);
+      const tuft=new T.Object3D();
+      for(let index=0;index<grass.count;index++){
+        const patch=Math.floor(index/4),d=from+(patch+.5)*10+Math.sin(index*9)*2;
+        const offset=(patch%2?1:-1)*(9+11*(1+Math.sin(patch*12+segment))+.55*(index%4));
+        const x=road(d)+offset;
+        tuft.position.set(x,ground(x,d)-.17,-d);
+        tuft.rotation.y=index*2.4;
+        tuft.scale.setScalar(.58+.49*Math.cos(index*13)**2);
+        tuft.updateMatrix();grass.setMatrixAt(index,tuft.matrix);
+      }
+      grass.computeBoundingSphere();
+      grass.userData.land='grass';
+      grass.visible=options.season==='summer'||options.season==='monsoon';
+      grass.material.color.set(options.season==='monsoon'?'#88994d':'#8d8b50');
+      group.add(grass);
+    }
     function strip(offset:number,width:number,color:string,ranges:number[][]){
       const vertices:number[]=[],indices:number[]=[];
       for(const [begin,end] of ranges){
-        const count=Math.ceil((end-begin)/4);
+        const count=Math.ceil((end-begin)/2);
         for(let index=0;index<=count;index++){
           const distance=begin+(end-begin)*index/count,base=vertices.length/3;
           for(const side of [-1,1]){
             const taper=1-T.MathUtils.smoothstep(distance,LENGTH+22,LENGTH+72);
             const lateral=road(distance)+(offset+side*width/2)*taper;
-            const elevation=width<1?.103:width===9?.075:.015;
+            const elevation=width<1?.103:width===ROAD_WIDTH?.075:.015;
             vertices.push(lateral,ground(lateral,distance)+elevation,-distance);
           }
           if(index)indices.push(base-2,base-1,base,base-1,base+1,base);
@@ -101,23 +154,47 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       }
       const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geometry.setIndex(indices);geometry.computeVertexNormals();
       const item=mesh(geometry,color,group);
-      if(width>=1)textureSurface(item,width===9?asphalt:sand,width===9?2.7:5.8);
+      if(width===ROAD_WIDTH){
+        item.userData.land='road';
+        item.material.color.set(seasons[options.season].road);
+        item.material.roughness=seasons[options.season].roughness;
+      }
+      if(width>=1)textureSurface(item,width===ROAD_WIDTH?asphalt:sand,width===ROAD_WIDTH?2.7:5.8);
     }
     if(from>=0&&from<LENGTH+72){
       const end=Math.min(to,LENGTH+72),range=[[from,end]];
       const leftEdge=from<=junction&&junction<end?[[from,junction-4],[junction+4,end]]:range;
-      strip(-5.08,1.4,'#ac875f',leftEdge);strip(5.08,1.4,'#ac875f',range);
-      strip(0,9,'#5f5b56',range);strip(-4,.10,'#ddbc6c',leftEdge);strip(4,.10,'#ddbc6c',range);
+      strip(-6.13,2,'#ac875f',leftEdge);strip(6.13,2,'#ac875f',range);
+      strip(0,ROAD_WIDTH,'#5f5b56',range);strip(-4.94,.13,'#ddbc6c',leftEdge);strip(4.94,.13,'#ddbc6c',range);
       strip(0,.13,'#eadbb5',Array.from({length:Math.max(0,Math.floor((Math.min(end,LENGTH+24)-from)/16))},(_,index)=>[from+index*16+4,from+index*16+10]));
     }
-    if(environment)decorate(group,environment,from,to);
-    function roadsideSign(distance:number,offset:number,heading:string,lines:string[],width=6.2){
+    if(environment)decorate(group,environment,from,to,colliders);
+    for(let d=Math.max(0,Math.ceil(from/12)*12);d<Math.min(to,LENGTH);d+=12){
+      if(d>=junction-38&&d<=junction-14){
+        const x=road(d)+7.4,y=ground(x,d);
+        const angle=-Math.atan2(road(d+1)-road(d-1),2);
+        const rail=mesh(new T.BoxGeometry(.21,.25,11.8),'#8b8981',group);
+        rail.position.set(x,y+.72,-d);rail.rotation.y=angle;
+        colliders.add({x,z:-d,width:.105,length:5.9,sin:Math.sin(angle),cos:Math.cos(angle)});
+        for(const offset of [-3.5,3.5]){
+          mesh(new T.BoxGeometry(.17,.85,.16),'#66655a',group).position.set(x+Math.sin(angle)*offset,y+.35,-d+Math.cos(angle)*offset);
+        }
+      }
+      if(d>2800&&d%84===0){
+        const x=road(d)+27*Math.sin(d);
+        if(Math.abs(x-road(d))<10)continue;
+        const rock=mesh(new T.DodecahedronGeometry(1),'#977d62',group);
+        rock.scale.set(1.55,.85,1.1);rock.position.set(x,ground(x,d)+.29,-d);
+        colliders.add({x,z:-d,width:1.37,length:.95,sin:0,cos:1});
+      }
+    }
+    function roadsideSign(distance:number,offset:number,heading:string,lines:string[],width=6.2,gateway=false){
       if(distance<from||distance>=to)return;
       const lateral=road(distance)+offset,elevation=ground(lateral,distance),height=lines.length>1?2.15:1.65;
       const board=document.createElement('canvas');board.width=768;board.height=lines.length>1?272:208;
       const context=board.getContext('2d');
       if(context){
-        context.fillStyle='#235247';context.fillRect(0,0,board.width,board.height);
+        context.fillStyle=gateway?'#753d2d':'#235247';context.fillRect(0,0,board.width,board.height);
         context.strokeStyle='#f4e5c5';context.lineWidth=5;context.strokeRect(12,12,744,board.height-24);
         context.fillStyle='#fff9e8';context.textAlign='center';context.textBaseline='middle';
         context.font='bold 42px system-ui';context.fillText(heading,384,52,680);
@@ -125,12 +202,28 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         lines.forEach((line,index)=>context.fillText(line,384,lines.length===1?127:110+index*60,690));
         const texture=new T.CanvasTexture(board);texture.colorSpace=T.SRGBColorSpace;
         const sign=new T.Mesh(new T.BoxGeometry(width,height,.09),new T.MeshBasicMaterial({map:texture}));
-        sign.position.set(lateral,elevation+2.7,-distance);group.add(sign);
+        sign.position.set(lateral,elevation+(gateway?5.2:2.7),-distance);group.add(sign);
       }
-      for(const post of [-1,1])mesh(new T.BoxGeometry(.13,3,.13),'#66635a',group).position.set(lateral+post*width*.37,elevation+1.3,-distance-.13);
+      for(const post of [-1,1]){
+        const x=lateral+post*width*(gateway?.47:.37),z=-distance-.13;
+        const thickness=gateway?.66:.13,postHeight=gateway?4.55:3;
+        mesh(new T.BoxGeometry(thickness,postHeight,thickness),gateway?'#a87555':'#66635a',group).position.set(x,ground(x,distance)+postHeight/2-.1,z);
+        colliders.add({x,z,width:thickness/2,length:thickness/2,sin:0,cos:1});
+      }
     }
-    stops.forEach((name,index)=>roadsideSign(index===0?42:index===7?LENGTH+15:checkpoints[index]-12,index===7?9.8:9,'WELCOME TO',[name.toUpperCase()],index===7?8:6.2));
+    stops.forEach((name,index)=>roadsideSign(index===0?42:index===7?LENGTH-19:checkpoints[index]-12,
+      index===7?0:9,'WELCOME TO',[name.toUpperCase()],index===7?15.8:6.2,index===7));
     roadsideSign(junction-3,-10,'JEELANI MOR JUNCTION',['← Khipro      ↑ Saeedau','Chhor ↓'],8.7);
+    for(const place of places){
+      if(place.distance<from||place.distance>=to||place.distance===junction)continue;
+      const side=Math.sign(place.offset),track=mesh(new T.PlaneGeometry(Math.abs(place.offset)-6.4,3.25,14,3),'#b09976',group);
+      track.geometry.rotateX(-Math.PI/2);
+      track.geometry.translate(road(place.distance)+(place.offset+6.4*side)/2,0,-place.distance);
+      const vertices=track.geometry.attributes.position;
+      for(let index=0;index<vertices.count;index++)vertices.setY(index,ground(vertices.getX(index),-vertices.getZ(index))-.05);
+      track.geometry.computeVertexNormals();textureSurface(track,sand,5.8);
+      roadsideSign(place.distance-5,8.6*side,side<0?'← LOCAL STOP':'LOCAL STOP →',[place.name],4.6);
+    }
     if(junction>=from&&junction<to){
       const sideRoad=new T.PlaneGeometry(42,7,22,4);
       sideRoad.rotateX(-Math.PI/2);
@@ -138,7 +231,9 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       const points=sideRoad.attributes.position;
       for(let index=0;index<points.count;index++)points.setY(index,ground(points.getX(index),-points.getZ(index))+.06);
       sideRoad.computeVertexNormals();
-      textureSurface(mesh(sideRoad,'#5f5b56',group),asphalt,2.7);
+      const item=mesh(sideRoad,seasons[options.season].road,group);
+      item.userData.land='road';item.material.roughness=seasons[options.season].roughness;
+      textureSurface(item,asphalt,2.7);
     }
     scene.add(group);chunks.set(segment,group);
   }
@@ -148,7 +243,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     if(segment===previousSegment)return;
     previousSegment=segment;
     renderer.shadowMap.needsUpdate=true;
-    for(const [key,group] of chunks)if(Math.abs(key-segment)>2){scene.remove(group);dispose(group);chunks.delete(key);}
+    for(const [key,group] of chunks)if(Math.abs(key-segment)>2){scene.remove(group);dispose(group);chunks.delete(key);collisionChunks.delete(key);}
     for(let key=segment-2;key<=segment+2;key++)if(!chunks.has(key))chunk(key);
   }
   const jeep=new T.Group(); scene.add(jeep);
@@ -181,6 +276,21 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         part([.23,.2,.06],[side*.73,1.17,-2.06],'#fff2ca');
       }
       part([1.94,.47,.12],[0,1.29,2.1],'#3c6a61');
+      for(const side of [-1,1]){
+        part([.035,.14,2.46],[side*.99,1.4,.82],'#dcb652');
+        part([.036,.075,2.48],[side*.99,1.23,.82],'#9e3828');
+        part([.035,.1,1.26],[side*.97,1.29,-1.32],'#e3ae52');
+        part([.04,.52,.72],[side*.97,1.79,-1.42],'#87aca8');
+        for(let panel=0;panel<6;panel++){
+          const ornament=part([.04,.13,.13],[side*.994,1.32,-.12+panel*.38],panel%2?'#f1d18c':'#992e25');
+          ornament.rotation.x=Math.PI/4;
+        }
+      }
+      for(let column=-4;column<=4;column++){
+        part([.14,.12,.045],[column*.19,1.3,2.183],column%2?'#cf9d4c':'#d9e2ad');
+        part([.14,.09,.045],[column*.19,1.1,-2.07],column%2?'#cf9d4c':'#d9e2ad');
+      }
+      part([1.37,.19,.09],[0,.91,-2.13],'#383735');
     }else{
       part([.18,.25,1.05],[0,.55,0],'#3b3b38');
       part([.3,.24,.51],[0,.83,-.27],'#a52b25');
@@ -231,7 +341,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   };
   const blur=()=>{keys.clear();release();};
   const pointer=(event:PointerEvent)=>{
-    if(options.paused||drag!==undefined||event.button!==0)return;
+    if((options.paused&&!options.preview)||drag!==undefined||event.button!==0)return;
     if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
     drag=event.pointerId;renderer.domElement.setPointerCapture(event.pointerId);
   };
@@ -239,7 +349,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     if(event.pointerId===drag){orbit-=event.movementX*.007;orbit=Math.atan2(Math.sin(orbit),Math.cos(orbit));}
   };
   const wheel=(event:WheelEvent)=>{
-    if(options.paused)return;
+    if(options.paused&&!options.preview)return;
     event.preventDefault();zoom=T.MathUtils.clamp(zoom+event.deltaY*.009,-4,7);
   };
   const listeners=new AbortController(),signal=listeners.signal;
@@ -256,43 +366,102 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     const width=host.clientWidth,height=host.clientHeight;
     if(!width||!height)return;
     renderer.setPixelRatio(pixelRatio);renderer.setSize(width,height);
-    camera.aspect=titleCamera.aspect=width/height;camera.updateProjectionMatrix();
+    camera.aspect=titleCamera.aspect=previewCamera.aspect=width/height;camera.updateProjectionMatrix();
     titleCamera.setViewOffset(width,height,width<height?0:-width*.235,width<height?height*.17:0,width,height);
+    previewCamera.setViewOffset(width,height,width<height?0:-width*.23,width<height?height*.33:0,width,height);
   };
   const observer=new ResizeObserver(resize);observer.observe(host);resize();
   const target=new T.Vector3();let first=true,previousTitle=options.title,reset=options.reset;
   let activeVehicle=options.vehicle;
-  let reached=0,furthest=0;
+  let run=newRun(options.mode),previousPreview=false;
+  let previousPaused=options.paused;
+  let steering=0,lastImpact=-Infinity;
   renderer.shadowMap.autoUpdate=false;
   let shadowVehicle:Vehicle|undefined,shadowParked:boolean|undefined;
   let shadowX=Infinity,shadowZ=Infinity,shadowHeading=Infinity;
   function frame(now:number){const elapsed=now-last,dt=Math.min(.18,elapsed/1000);last=now;
+    const season=seasons[options.season];
+    if(currentSeason!==options.season){
+      currentSeason=options.season;
+      sky.material.uniforms.horizon.value.set(season.horizon);
+      sky.material.uniforms.zenith.value.set(season.zenith);
+      sky.material.uniforms.glowStrength.value=currentSeason==='monsoon'?.13:1;
+      sky.material.uniforms.cloudCover.value=currentSeason==='monsoon'?.68:0;
+      const fog=scene.fog as T.FogExp2;
+      fog.color.set(season.fog);fog.density=season.density;
+      ambient.color.set(season.ambient);sun.intensity=season.light;
+      tuneVegetation(currentSeason);
+      for(const group of chunks.values())for(const item of group.children){
+        if(item instanceof T.Mesh&&item.userData.land==='soil')item.material.color.set(season.soil);
+        if(item instanceof T.Mesh&&item.userData.land==='grass'){
+          item.visible=currentSeason==='summer'||currentSeason==='monsoon';
+          item.material.color.set(currentSeason==='monsoon'?'#88994d':'#8d8b50');
+        }
+        if(item instanceof T.Mesh&&item.userData.land==='road'){
+          item.material.color.set(season.road);item.material.roughness=season.roughness;
+        }
+      }
+      renderer.shadowMap.needsUpdate=true;
+    }
     const cameraDt=elapsed/1000;
-    if(options.mobile&&!document.hidden){
+    if(!document.hidden){
       frameAverage+=.055*(Math.min(elapsed,150)-frameAverage);
       if(now-qualityCheck>2400){
-        const ratio=frameAverage>34?Math.max(.6,pixelRatio-.12):frameAverage<23?Math.min(1,devicePixelRatio,pixelRatio+.08):pixelRatio;
+        const ceiling=Math.min(options.mobile?1:1.5,devicePixelRatio);
+        const ratio=frameAverage>34?Math.max(Math.min(.65,ceiling),pixelRatio-.12):frameAverage<23?Math.min(ceiling,pixelRatio+.08):pixelRatio;
         if(ratio!==pixelRatio){pixelRatio=ratio;resize();}
         qualityCheck=now;
       }
     }
     if(previousTitle!==options.title){previousTitle=options.title;first=true;}
-    if(reset!==options.reset){reset=options.reset;car=start();reached=furthest=0;first=true;orbit=zoom=0;keys.clear();release();options.touch.clear();}
+    if(reset!==options.reset){reset=options.reset;car=start();run=newRun(options.mode);steering=0;lastImpact=-Infinity;first=true;orbit=zoom=0;release();}
     if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;first=true;orbit=zoom=0;release();}
+    if(previousPreview!==options.preview){previousPreview=options.preview;first=true;orbit=zoom=0;release();}
+    const resumed=previousPaused&&!options.paused;
+    if(previousPaused!==options.paused){
+      previousPaused=options.paused;
+      if(previousPaused){keys.clear();options.touch.clear();}
+    }
     const touch=[...options.touch.values()];
     const steer=+(keys.has('KeyD')||keys.has('ArrowRight')||touch.includes('right'))-+(keys.has('KeyA')||keys.has('ArrowLeft')||touch.includes('left'));
     const throttle=keys.has('KeyW')||keys.has('ArrowUp')||touch.includes('throttle');
     const reverse=keys.has('KeyS')||keys.has('ArrowDown')||touch.includes('reverse');
     const parked=options.title;
-    if(!options.paused&&!document.hidden){
-      const steps=Math.max(1,Math.ceil(dt*90)),input={throttle,reverse,steer,brake:keys.has('Space')||touch.includes('brake')};
+    if(options.finish&&run.mode==='explorer')run.outcome='finished';
+    if(!options.paused&&!document.hidden&&!run.outcome){
+      stream(car.position);
+      const steps=Math.max(1,Math.ceil(dt*75)),stepTime=dt/steps,profile=vehicles[activeVehicle];
+      const input={throttle,reverse,steer,brake:keys.has('Space')||touch.includes('brake')};
       for(let step=0;step<steps;step++){
-        advance(car,dt/steps,input,activeVehicle);
-        reached=visit(reached,car.position,car.lateral);
-        furthest=Math.max(furthest,Math.min(checkpoints[reached+1]??LENGTH,car.position));
+        const clock=resumed?stepTime:elapsed/1000/steps;
+        if(!tick(run,run.countdown>0?stepTime:clock)){
+          if(run.outcome)break;
+          continue;
+        }
+        steering=T.MathUtils.damp(steering,steer,12,stepTime);
+        const {position,lateral}=car;
+        advance(car,stepTime,{...input,steer:steering},activeVehicle,season.grip);
+        const angle=-car.heading;
+        const movement=moveThrough({x:lateral,z:-position,width:profile.width,length:profile.length,
+          sin:Math.sin(angle),cos:Math.cos(angle)},car.lateral-lateral,position-car.position,collisionChunks.values());
+        car.lateral=T.MathUtils.clamp(lateral+movement.dx,-110,110);
+        car.position=T.MathUtils.clamp(position-movement.dz,0,LENGTH);
+        if(movement.impact>.0001){
+          const impactSpeed=movement.impact/stepTime;
+          if(impactSpeed>2&&now-lastImpact>950){
+            run.impacts++;if(impactSpeed>=14)run.crashes++;
+            lastImpact=now;
+          }
+          car.speed=Math.sign(car.speed)*Math.max(0,Math.abs(car.speed)-impactSpeed*.95);
+        }
+        if(!paved(car.lateral,car.position)&&Math.abs(car.speed)>.5)run.offRoad+=clock;
+        checkpoint(run,visit(run.leg,car.position,car.lateral,run.mode==='race'||run.mode==='challenge'));
+        run.progress=Math.max(run.progress,Math.min(checkpoints[run.leg+1]??LENGTH,car.position));
+        discover(run,car);
+        if(run.outcome)break;
       }
     }
-    const shown=parked?displayCar:car;
+    const shown=parked?displayCar:options.preview?previewCar:car;
     stream(shown.position);
     const {model,tires}=fleet[parked?'jeep':activeVehicle];
     for(const entry of Object.values(fleet))entry.model.visible=entry.model===model;
@@ -304,6 +473,15 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       const distance=titleCamera.aspect<1?8.7:7.1;
       titleCamera.position.set(shown.lateral-Math.sin(angle)*distance,y+2.0+drift,-shown.position+Math.cos(angle)*distance);
       titleCamera.lookAt(shown.lateral,y+.98,-shown.position);
+    }else if(options.preview){
+      const angle=shown.heading+1.02+orbit+options.previewAngle+(options.reducedMotion?0:Math.sin(now*.00035)*.12);
+      const distance=Math.max(3.1,chaseProfiles[activeVehicle].distance+zoom+options.previewZoom);
+      previewCamera.position.set(shown.lateral-Math.sin(angle)*distance,y+distance*.33,-shown.position+Math.cos(angle)*distance);
+      previewCamera.lookAt(shown.lateral,y+1,-shown.position);
+    }else if(run.outcome==='finished'&&run.leg===stops.length-1){
+      const distance=LENGTH-33,x=road(distance)-2.7;
+      camera.position.set(x,ground(x,distance)+3.2,-distance);
+      camera.lookAt(road(LENGTH-19),ground(road(LENGTH-19),LENGTH-19)+3.45,-(LENGTH-19));
     }else{
       if(options.recenter&&drag===undefined&&now>=returnAfter){
         orbit*=Math.exp(-Math.min(cameraDt,(now-returnAfter)/1000)*4);
@@ -324,10 +502,10 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       target.set(car.lateral+forwardX*3.1,targetY,-car.position+forwardZ*3.1);
       camera.lookAt(target);first=false;
     }
-    const view=parked?titleCamera:camera;
+    const view=parked?titleCamera:options.preview?previewCamera:camera;
     sky.position.copy(view.position);
     sun.position.set(shown.lateral-(parked?37:27),y+(parked?26:34),-shown.position-19);
-    sun.color.set(parked?'#ffe0b5':'#ffebcf');
+    sun.color.set(season.sun);
     const visibleVehicle=parked?'jeep':activeVehicle;
     if(options.shadows&&(!sun.castShadow||shadowParked!==parked||shadowVehicle!==visibleVehicle||
       Math.hypot(shown.lateral-shadowX,shown.position-shadowZ)>.22||Math.abs(shown.heading-shadowHeading)>.025)){
@@ -335,11 +513,24 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       shadowParked=parked;shadowVehicle=visibleVehicle;shadowX=shown.lateral;shadowZ=shown.position;shadowHeading=shown.heading;
     }
     sun.target.position.copy(model.position);sun.castShadow=options.shadows;
-    dust.visible=!parked&&Math.abs(car.speed)>3; if(dust.visible){for(let index=0;index<30;index++){const phase=(now*.001+index/30)%1, trail=1.5+phase*6;particles[index*3]=car.lateral-Math.sin(car.heading)*trail+Math.sin(index*51)*phase;particles[index*3+1]=y+.2+phase*.7;particles[index*3+2]=-car.position+Math.cos(car.heading)*trail;}dust.geometry.attributes.position.needsUpdate=true;dust.frustumCulled=false;}
+    dust.visible=!parked&&currentSeason!=='monsoon'&&Math.abs(car.speed)>3&&(!paved(car.lateral,car.position)||currentSeason==='dry'); if(dust.visible){for(let index=0;index<30;index++){const phase=(now*.001+index/30)%1, trail=1.5+phase*6;particles[index*3]=car.lateral-Math.sin(car.heading)*trail+Math.sin(index*51)*phase;particles[index*3+1]=y+.2+phase*.7;particles[index*3+2]=-car.position+Math.cos(car.heading)*trail;}dust.geometry.attributes.position.needsUpdate=true;dust.frustumCulled=false;}
+    rain.visible=!parked&&currentSeason==='monsoon'&&!options.reducedMotion&&Math.floor(now/22000)%2===0;
+    if(rain.visible){
+      rain.position.copy(view.position);
+      const count=options.mobile?75:180;
+      rainGeometry.setDrawRange(0,count*2);
+      for(let i=0;i<count;i++){
+        const x=Math.sin(i*13.57)*16,z=Math.cos(i*27.12)*20;
+        const drop=(((i*.618-now*.0017)%1+1)%1)*14-4;
+        rainPoints.set([x,drop,z,x-.17,drop+.65,z+.06],i*6);
+      }
+      rainGeometry.attributes.position.needsUpdate=true;
+    }
     renderer.render(scene,view);
     if(now-lastReport>100){
-      const speed=Math.abs(car.speed)*3.6,progress=reached===stops.length-1?1:Math.min(.999,furthest/LENGTH);
-      report(speed,car.position,reached,progress,{speed,throttle:throttle||reverse,sand:Math.abs(car.lateral-road(car.position))>4});
+      const speed=Math.abs(car.speed)*3.6,progress=run.leg===stops.length-1?1:Math.min(.999,run.progress/LENGTH);
+      report(speed,car.position,progress,{speed,throttle:throttle||reverse,sand:!paved(car.lateral,car.position),
+        season:options.season,rain:rain.visible}, {...run});
       lastReport=now;
     }
     handle=requestAnimationFrame(frame);

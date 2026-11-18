@@ -1,7 +1,9 @@
 import {chromium,expect} from '@playwright/test';
 import {createServer} from 'vite';
+import {join} from 'node:path';
 
-const server=await createServer({server:{host:'127.0.0.1',port:5173,strictPort:true}});
+const port=Number(process.env.SAEEDAU_TEST_PORT??5173);
+const server=await createServer({server:{host:'127.0.0.1',port,strictPort:true}});
 function wave(frequency){
   const length=48000, result=Buffer.alloc(44+length*2);
   result.write('RIFF');result.writeUInt32LE(result.length-8,4);result.write('WAVEfmt ',8);
@@ -19,8 +21,9 @@ try {
   const faults=[];page.on('pageerror',error=>faults.push(error.message));
   page.on('requestfailed',request=>{if(request.url().includes('youtube'))console.log('YouTube request:',request.failure()?.errorText, new URL(request.url()).pathname);});
   const button=name=>page.getByRole('button',{name,exact:true});
+  const shot=name=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts',name)});
   const media=()=>page.locator('audio').evaluate(audio=>({paused:audio.paused,time:audio.currentTime,volume:audio.volume}));
-  await page.goto('http://127.0.0.1:5173');
+  await page.goto('http://127.0.0.1:'+port);
   await button('Garage').click();await button('Expand').click();
   const input=page.locator('input[type=file]');
   await input.setInputFiles([{name:'Dune-one.wav',mimeType:'audio/wav',buffer:wave(220)},{name:'Dune-two.wav',mimeType:'audio/wav',buffer:wave(330)}]);
@@ -54,17 +57,18 @@ try {
   await button('Collapse').click();await expect(page.locator('.radio-embed iframe')).toHaveCount(0);
   await button('Expand').click();
   await expect(page.locator('.radio-embed iframe')).toHaveCount(1,{timeout:14000});
-  await page.screenshot({path:'artifacts/fix-radio-expanded.png'});
+  await shot('fix-radio-expanded.png');
   await button('My Music').click();
   await expect(page.locator('.radio-embed iframe')).toHaveCount(0);
   await expect(button('Dune-two')).toHaveAttribute('aria-current','true');
   await button('Play music').click();
   await button('Back').click();await button('start journey').click();
+  await button('Start Free Journey').click();
   await expect(button('Pause music')).toBeVisible();
-  await page.screenshot({path:'artifacts/fix-local-expanded.png'});
+  await shot('fix-local-expanded.png');
   await button('Collapse').click();
   await expect.poll(async()=>(await media()).paused).toBe(false);
-  await page.screenshot({path:'artifacts/fix-radio-compact.png'});
+  await shot('fix-radio-compact.png');
   await page.mouse.click(620,320);await page.keyboard.press('m');
   await expect(button('Collapse')).toBeVisible();
   await button('Remove Dune-one').click();await expect(button('Dune-one')).toHaveCount(0);

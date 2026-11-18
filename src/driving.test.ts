@@ -1,9 +1,23 @@
 import {describe,expect,it} from 'vitest';
 import {advance,checkpoints,dampHeading,LENGTH,road,start,stops,vehicles,visit,type Vehicle} from './driving';
+import {Colliders,moveThrough} from './collision';
 
 const throttle={throttle:true,reverse:false,steer:0,brake:false};
 
 describe('desert journey',()=>{
+  it('sweeps every vehicle through the grid without tunneling through a thin barrier',()=>{
+    const grid=new Colliders();
+    grid.add({x:0,z:-20,width:6,length:.11,sin:0,cos:1});
+    for(const {width,length} of Object.values(vehicles)){
+      const vehicle={x:0,z:0,width,length,sin:0,cos:1};
+      const result=moveThrough(vehicle,3,-40,[grid]);
+      expect(result.dz).toBeGreaterThan(-20+.11+length);
+      expect(result.dz).toBeLessThan(-16);
+      expect(result.dx).toBeCloseTo(3,2);
+      expect(result.impact).toBe(40);
+      expect(moveThrough({...vehicle,x:12},0,-40,[grid]).dz).toBe(-40);
+    }
+  });
   it('damps through the shortest heading arc independent of frame subdivision',()=>{
     const from=Math.PI-.06,to=-Math.PI+.06;
     const once=dampHeading(from,to,.08);

@@ -1,19 +1,25 @@
 import {chromium,expect} from '@playwright/test';
 import {createServer} from 'vite';
+import {join} from 'node:path';
 
 const server=await createServer({
   server:{host:'127.0.0.1',port:5173,strictPort:true},
   plugins:[{name:'world-verification-positions',enforce:'pre',transform(code,id){
     if(!id.replaceAll('\\','/').endsWith('/src/scene.ts'))return;
-    return code.replace('let reached=0,furthest=0;',`let reached=0,furthest=0;
+    return code.replace('car=start();run=newRun(options.mode);',`car=start();run=newRun(options.mode);
       const requestedShot=new URLSearchParams(location.search);
       if(requestedShot.has('worldShot')){
         car.position=Number(requestedShot.get('worldShot'));
         car.lateral=road(car.position);
         car.heading=Math.atan2(road(car.position+.01)-road(car.position-.01),.02);
-        reached=Number(requestedShot.get('visited')||0);
-        furthest=car.position;
-      }`);
+        if(requestedShot.has('offset'))car.lateral+=Number(requestedShot.get('offset'));
+        if(requestedShot.has('heading'))car.heading=Number(requestedShot.get('heading'));
+        run.leg=Number(requestedShot.get('visited')||0);
+        run.progress=car.position;
+      }
+      if(requestedShot.has('timeout'))run.remaining=.3;`)
+      .replace('lastReport=now;',`lastReport=now;
+        if(location.search.includes('solid=1'))host.dataset.verification=JSON.stringify({car,impacts:run.impacts});`);
   }}],
 });
 let browser;
@@ -25,8 +31,19 @@ try {
   page.on('pageerror',error=>errors.push(error.message));
   const base='http://127.0.0.1:5173';
   const button=name=>page.getByRole('button',{name,exact:true});
+  const shot=name=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts','v15-'+name+'.png')});
   await page.goto(base);
   await button('start journey').click();
+  await shot('modes');
+  await button('Garage').click();
+  await button('Kekro').click();await button('Rotate right').click();await shot('garage');
+  await button('Long Chassis jeep').click();await button('Back').click();
+  for(const [value,label] of [['winter','Winter'],['monsoon','Monsoon'],['dry','Dry / Hot'],['summer','Summer']]){
+    await page.getByLabel('Season',{exact:true}).selectOption(value);
+    await expect(page.getByLabel('Season',{exact:true}).locator('option:checked')).toHaveText(label);
+    await shot(value);
+  }
+  await button('Start Free Journey').click();
   await page.keyboard.down('w');
   try{
     await expect.poll(async()=>Number(await page.locator('.hud strong').textContent()),{timeout:18000}).toBeGreaterThan(15);
@@ -71,7 +88,7 @@ try {
 
   const views=[
     ['umerkot',18,0],['chhor',805,0],['jeelani-mor',1665,1],['tebhri-bhanbhra',2616,2],
-    ['dodhar',3665,3],['open-thar',4140,4],['pataho',4715,4],['hingorao',5865,5],['saeedau',6999,6],
+    ['dodhar',3665,3],['open-thar',4140,4],['pataho',4715,4],['hingorao',5865,5],['saeedau',6969,6],
   ];
   const requestedViews=new Set(process.argv.slice(2));
   const captures=requestedViews.size?views.filter(([name])=>requestedViews.has(name)):views;
@@ -80,17 +97,65 @@ try {
     const kit=page.waitForResponse(response=>response.url().endsWith('/settlement/kit.glb')&&response.ok());
     await page.goto(`${base}/?worldShot=${distance}&visited=${visited}`);
     await button('start journey').click();
+    await button('Start Free Journey').click();
     await kit;
-    if(name==='saeedau')await expect(page.getByRole('status')).toContainText('Welcome to Saeedau');
-    else if(name!=='umerkot')await expect(page.locator('.checkpoint-toast')).toHaveCount(0,{timeout:8000});
     await page.waitForTimeout(540);
-    await page.screenshot({path:`artifacts/world-${name}.png`});
+    await shot(name);
   }
   const frameRate=await page.evaluate(()=>new Promise(resolve=>{
     let frames=0,start=performance.now();
     const tick=now=>{frames++;if(now-start>=2000)resolve(frames*1000/(now-start));else requestAnimationFrame(tick);};
     requestAnimationFrame(tick);
   }));
+  for(const mode of ['Free Journey','Speed Racing','Checkpoint Challenge','Desert Explorer']){
+    const query=mode==='Checkpoint Challenge'?'timeout=1':mode==='Desert Explorer'?'worldShot=31':'worldShot=6999&visited=6';
+    await page.goto(base+'/?'+query);
+    await button('start journey').click();
+    await page.getByRole('button',{name:new RegExp('^'+mode)}).click();
+    if(mode==='Speed Racing'){
+      await page.evaluate(()=>{
+        const observer=new MutationObserver(mutations=>{
+          if(mutations.some(mutation=>[...mutation.addedNodes].some(node=>node instanceof Element&&
+            (node.matches('.race-countdown')||node.querySelector('.race-countdown'))))){
+            document.body.dataset.raceCountdown='seen';observer.disconnect();
+          }
+        });
+        observer.observe(document.body,{childList:true,subtree:true});
+      });
+    }
+    await button('Start '+mode).click();
+    if(mode==='Desert Explorer'){await button('Pause').click();await button('Finish expedition').click();}
+    await expect(page.locator('.results-panel h1')).toHaveText(mode==='Checkpoint Challenge'?'Time expired':mode==='Desert Explorer'?'Expedition complete':'Welcome to Saeedau',{timeout:18000});
+    if(mode==='Free Journey')await shot('arrival');
+    if(mode==='Speed Racing'){
+      await expect(page.locator('body')).toHaveAttribute('data-race-countdown','seen');
+      const saved=()=>page.evaluate(()=>localStorage.getItem('saeedau.records'));
+      const before=await saved();
+      expect(JSON.parse(before)['race.jeep.summer'].time).toBeGreaterThan(0);
+      await page.reload();
+      expect(await saved()).toBe(before);
+    }
+  }
+  await button('Main menu').click();await button('Credits').click();
+  await expect(button('Back to Menu')).toBeVisible();await button('Back to Menu').click();
+  const obstacles=[
+    {distance:3731,offset:20,heading:-Math.PI/2},
+    {distance:1680,offset:2,heading:Math.PI/2},
+  ];
+  for(const obstacle of obstacles){
+    const setup=new URLSearchParams({worldShot:obstacle.distance,offset:obstacle.offset,heading:obstacle.heading,solid:1});
+    const kit=page.waitForResponse(response=>response.url().endsWith('/houses/kit.glb')&&response.ok());
+    await page.goto(base+'/?'+setup);await kit;
+    await button('start journey').click();await button('Start Free Journey').click();
+    const state=async()=>JSON.parse(await page.locator('.world').getAttribute('data-verification')??'null');
+    await page.keyboard.down('w');
+    try{
+      await expect.poll(async()=>(await state())?.impacts??0,{timeout:25000}).toBeGreaterThan(0);
+      const atImpact=(await state()).car.lateral;
+      await page.waitForTimeout(900);
+      expect(Math.abs((await state()).car.lateral-atImpact)).toBeLessThan(.3);
+    }finally{await page.keyboard.up('w');}
+  }
   expect(errors).toEqual([]);
   console.log('Edge SwiftShader at 1120×630, '+captures.at(-1)[0]+' FPS:',frameRate.toFixed(1));
 }finally{try{await browser?.close();}finally{await server.close();}}

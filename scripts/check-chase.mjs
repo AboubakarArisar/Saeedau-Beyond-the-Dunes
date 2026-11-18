@@ -1,7 +1,9 @@
 import {chromium,expect} from '@playwright/test';
 import {createServer} from 'vite';
+import {join} from 'node:path';
 
-const server=await createServer({server:{host:'127.0.0.1',port:5173,strictPort:true}});
+const port=Number(process.env.SAEEDAU_TEST_PORT??5173);
+const server=await createServer({server:{host:'127.0.0.1',port,strictPort:true}});
 let browser;
 try{
   await server.listen();
@@ -10,9 +12,10 @@ try{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const button=name=>page.getByRole('button',{name,exact:true});
   const speed=()=>page.locator('.hud strong');
-  const shot=name=>page.screenshot({path:`artifacts/fix-${name}.png`});
-  await page.goto('http://127.0.0.1:5173');
+  const shot=name=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts',`fix-${name}.png`)});
+  await page.goto('http://127.0.0.1:'+port);
   await button('start journey').click();
+  await button('Start Free Journey').click();
   await expect(page.locator('.hud-distance')).toContainText('to Chhor');
   await page.waitForTimeout(700);
   await expect(speed()).toHaveText('0');
@@ -40,10 +43,13 @@ try{
   finally{await page.keyboard.up('s');}
   await page.keyboard.press('r');await expect(speed()).toHaveText('0');
   for(const vehicle of ['Kekro','Unique 70 motorcycle','Long Chassis jeep']){
-    await button('Pause').click();await button('Garage').click();await button(vehicle).click();
-    await button('Back').click();await button('start journey').click();
+    await button('Pause').click();page.once('dialog',dialog=>dialog.accept());await button('Main menu').click();
+    await button('start journey').click();await button(vehicle).click();await button('Start Free Journey').click();
     await expect(page.locator('.hud-vehicle')).toHaveText(vehicle);
     await expect(speed()).toHaveText('0');
+    await page.keyboard.down('w');
+    try{await expect.poll(async()=>Number(await speed().textContent())).toBeGreaterThan(3);}
+    finally{await page.keyboard.up('w');}
   }
   expect(errors).toEqual([]);
   console.log('Chase, desktop HUD, orbit return capture, steering, reverse, reset and vehicle switching passed.');

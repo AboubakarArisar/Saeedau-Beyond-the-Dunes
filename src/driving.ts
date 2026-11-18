@@ -3,16 +3,20 @@ export const stops = [
 ] as const;
 export const checkpoints=[0,850,1700,2650,3700,4750,5900,7000] as const;
 export const LENGTH = checkpoints[7];
-export function visit(last:number,position:number,lateral:number){
+export const ROAD_WIDTH=10.6;
+export const paved=(x:number,distance:number)=>Math.abs(x-road(distance))<=ROAD_WIDTH/2||
+  (Math.abs(distance-junction)<=3.5&&x>=road(junction)-43&&x<=road(junction));
+export function visit(last:number,position:number,lateral:number,restricted=false){
   const next=checkpoints[last+1];
-  return next!==undefined&&Math.abs(position-next)<=(next===LENGTH?2:18)&&Math.abs(lateral-road(position))<=13?last+1:last;
+  return next!==undefined&&Math.abs(position-next)<=(next===LENGTH?2:18)&&
+    Math.abs(lateral-road(position))<=(restricted?ROAD_WIDTH/2:13)?last+1:last;
 }
 export const development=(distance:number)=>Math.max(0,Math.min(1,(3000-distance)/2100));
 export const junction=checkpoints[2];
 export const vehicles = {
-  jeep: {name:'Long Chassis jeep', acceleration:5.1, top:35, sand:15, turn:1, braking:8, radius:.39},
-  kekro: {name:'Kekro', acceleration:3.5, top:29, sand:14, turn:.78, braking:6, radius:.5},
-  unique: {name:'Unique 70 motorcycle', acceleration:4.7, top:24, sand:11, turn:1.18, braking:7, radius:.33},
+  jeep: {name:'Long Chassis jeep', acceleration:5.1, top:35, sand:15, turn:1, braking:9, radius:.39,width:.96,length:1.99},
+  kekro: {name:'Kekro', acceleration:3.7, top:30, sand:13, turn:.81, braking:7, radius:.5,width:1.16,length:2.28},
+  unique: {name:'Unique 70 motorcycle', acceleration:4.7, top:25, sand:11, turn:1.22, braking:8, radius:.33,width:.29,length:1.07},
 };
 export type Vehicle = keyof typeof vehicles;
 export const chaseProfiles={
@@ -37,20 +41,21 @@ export const start = (): Drive => {
   const position = 18;
   return {position,lateral:road(position),heading:Math.atan((34/115)*Math.cos(position/115)+(19/57)*Math.cos(position/57)),speed:0};
 };
-export function advance(car: Drive, dt: number, input: {throttle:boolean; reverse:boolean; steer:number; brake:boolean}, vehicle:Vehicle='jeep') {
+export function advance(car: Drive, dt: number, input: {throttle:boolean; reverse:boolean; steer:number; brake:boolean}, vehicle:Vehicle='jeep', grip=1) {
   const profile=vehicles[vehicle];
-  const loose = Math.abs(car.lateral-road(car.position)) > 4;
+  const loose = !paved(car.lateral,car.position);
+  if(loose)grip*=.72;
   const speed=Math.abs(car.speed),ratio=Math.min(1,speed/profile.top);
   const approach=(target:number,rate:number)=>car.speed+=Math.sign(target-car.speed)*Math.min(Math.abs(target-car.speed),rate*dt);
-  if(input.brake)approach(0,profile.braking*1.35);
-  else if(input.reverse&&!input.throttle)approach(-6,car.speed>0?profile.braking:2.7);
+  if(input.brake)approach(0,profile.braking*1.35*grip);
+  else if(input.reverse&&!input.throttle)approach(-6,car.speed>0?profile.braking*grip:2.7);
   else if(input.throttle){
     const limit=loose?profile.sand:profile.top;
-    const pull=profile.acceleration*(1-.57*ratio)-.32-.60*ratio*ratio-(loose?.7:0);
-    approach(limit,car.speed>limit?3.2:Math.max(.18,pull));
+    const pull=profile.acceleration*(1-.61*ratio)*grip;
+    approach(limit,car.speed>limit?3.8:car.speed<0?profile.braking*grip:pull);
   }else approach(0,(loose?1.45:.48)+.88*ratio*ratio);
   const turn=Math.min(Math.abs(car.speed)/4,1)/(1+(Math.abs(car.speed)/8.5)**1.65);
-  car.heading += input.steer * turn * Math.sign(car.speed)*dt*profile.turn;
+  car.heading += input.steer * turn * Math.sign(car.speed)*dt*profile.turn*grip*(input.brake?1.25:1);
   car.lateral = Math.max(-110,Math.min(110,car.lateral+Math.sin(car.heading)*car.speed*dt));
   car.position = Math.max(0,Math.min(LENGTH,car.position+Math.cos(car.heading)*car.speed*dt));
   if(car.position===LENGTH||car.position===0) {

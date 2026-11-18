@@ -1,12 +1,15 @@
 import {chromium,devices,expect} from '@playwright/test';
 import {createServer} from 'vite';
+import {join} from 'node:path';
 
-const server=await createServer({server:{host:'127.0.0.1',port:5173,strictPort:true}});
+const port=Number(process.env.SAEEDAU_TEST_PORT??5173);
+const server=await createServer({server:{host:'127.0.0.1',port,strictPort:true}});
+const shot=(page,name)=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts',name)});
 let browser;
 try {
   await server.listen();
   browser=await chromium.launch({channel:'msedge',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
-  const url='http://127.0.0.1:5173';
+  const url='http://127.0.0.1:'+port;
   const ready=async page=>{
     const assets=page.waitForResponse(response=>response.url().endsWith('/vehicles/long-chassis.glb')&&response.ok());
     await page.goto(url);await assets;
@@ -17,12 +20,13 @@ try {
   await ready(desktop);
   await expect(desktop.getByRole('heading',{name:'saeedau.'})).toBeVisible();
   await expect(desktop.locator('.panel')).toHaveCount(0);
-  await desktop.screenshot({path:'artifacts/fix-title-1366.png'});
+  await shot(desktop,'fix-title-1366.png');
   await desktop.setViewportSize({width:1920,height:1080});
   await desktop.waitForTimeout(400);
-  await desktop.screenshot({path:'artifacts/fix-title-1920.png'});
+  await shot(desktop,'fix-title-1920.png');
   await desktop.setViewportSize({width:960,height:540});
   await desktop.getByRole('button',{name:'start journey'}).click();
+  await desktop.getByRole('button',{name:'Start Free Journey',exact:true}).click();
   await desktop.keyboard.down('w');
   try {await expect.poll(async()=>Number(await desktop.locator('.hud strong').textContent()),{timeout:15000}).toBeGreaterThan(3);}
   finally {await desktop.keyboard.up('w');}
@@ -39,14 +43,15 @@ try {
   const rotate=mobile.getByRole('dialog',{name:'rotate your phone.'});
   await expect(rotate).toHaveCount(0);
   await mobile.getByRole('button',{name:'start journey'}).tap();
+  await mobile.getByRole('button',{name:'Start Free Journey',exact:true}).tap();
   await expect(rotate).toBeVisible();
-  await mobile.screenshot({path:'artifacts/fix-rotate.png'});
+  await shot(mobile,'fix-rotate.png');
   await mobile.getByRole('button',{name:'Continue in portrait'}).tap();
   await expect(rotate).toHaveCount(0);
   await mobile.setViewportSize({width:844,height:390});
   await expect(mobile.getByRole('button',{name:'Accelerate'})).toBeVisible();
   await mobile.waitForTimeout(400);
-  await mobile.screenshot({path:'artifacts/fix-mobile-ready.png'});
+  await shot(mobile,'fix-mobile-ready.png');
   await expect.poll(()=>mobile.evaluate(()=>window.testGameAudio?.state)).toBe('running');
   const [go,steer]=await Promise.all(['Accelerate','Steer right'].map(async name=>{
     const bounds=await mobile.getByRole('button',{name,exact:true}).boundingBox();
@@ -58,7 +63,7 @@ try {
   try {await expect.poll(async()=>Number(await mobile.locator('.hud strong').textContent()),{timeout:15000}).toBeGreaterThan(3);}
   finally {await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
   await expect(mobile.locator('[data-held=true]')).toHaveCount(0);
-  await mobile.screenshot({path:'artifacts/fix-mobile-driving.png'});
+  await shot(mobile,'fix-mobile-driving.png');
   await mobile.getByRole('button',{name:'Reset'}).tap();
   await expect(mobile.locator('.hud strong')).toHaveText('0');
   await mobile.getByRole('button',{name:'Expand'}).tap();

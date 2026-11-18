@@ -17,6 +17,7 @@ try {
   await page.goto('http://127.0.0.1:5173');
   await Promise.all(kits);
   await page.getByRole('button',{name:'start journey'}).click();
+  await page.getByRole('button',{name:'Start Free Journey',exact:true}).click();
   const shot=name=>page.screenshot({path:`artifacts/thar-${name}.png`});
   const speed=async()=>Number(await page.locator('.hud strong').textContent());
   const orbit=async delta=>{

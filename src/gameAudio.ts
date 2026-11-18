@@ -1,4 +1,5 @@
 import type {Vehicle} from './driving';
+import type {Season} from './seasons';
 
 export const defaults={master:.75,music:.65,engine:.38,environment:.35,mute:false};
 export type AudioSettings=typeof defaults;
@@ -10,7 +11,7 @@ export function savePreference(key:string,value:unknown){
   try {localStorage.setItem('saeedau.'+key,JSON.stringify(value));}
   catch(error){console.warn('Could not save audio preferences',error);}
 }
-export type Motion={speed:number;throttle:boolean;sand:boolean};
+export type Motion={speed:number;throttle:boolean;sand:boolean;season?:Season;rain?:boolean};
 
 export function createGameAudio(){
   const context=new AudioContext();
@@ -36,8 +37,9 @@ export function createGameAudio(){
       set(engine.frequency,frequency);set(pulse.frequency,frequency*(vehicle==='kekro'?2:3));
       set(filter.frequency,vehicle==='unique'?380:vehicle==='jeep'?260:175);
       set(engineGain.gain,settings.engine*(.09+speed*.07+(motion.throttle?.05:0)));
-      set(roadFilter.frequency,motion.sand?560:195+speed*170);
-      set(windGain.gain,settings.environment*(.09+speed*(motion.sand?.43:.26)));
+      set(roadFilter.frequency,motion.rain?1950:motion.sand?560:195+speed*170);
+      const ambience=motion.rain?.21:motion.season==='dry'?.13:motion.season==='winter'?.06:.09;
+      set(windGain.gain,settings.environment*(ambience+speed*(motion.sand?.43:.26)));
     },
     dispose(){engine.stop();pulse.stop();wind.stop();void context.close().catch(error=>console.warn('Could not close game audio',error));},
   };
