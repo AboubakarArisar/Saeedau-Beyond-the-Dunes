@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState,type PointerEvent} from 'react';
+import {useEffect,useRef,useState,type RefObject,type PointerEvent} from 'react';
 
 export const touchDevice='(any-pointer: coarse)';
 export type DriveAction='left'|'right'|'throttle'|'reverse'|'brake';
@@ -59,15 +59,26 @@ const icons:Record<DriveAction,string>={
   reverse:'M5 7h14l1 10H4L5 7Zm3 4h8m-8 3h8',
   brake:'M6 4h7a2 2 0 0 1 0 4H9v8h10v4H5V8a4 4 0 0 1 1-4Z',
 };
-export function TouchDrive({inputs}:{inputs:Map<number,DriveAction>}){
+export function TouchDrive({inputs,method,wheelSensitivity,analog}:{inputs:Map<number,DriveAction>;method:string;wheelSensitivity:number;analog:RefObject<number>}){
+  const wheel=useRef<{id:number;angle:number;rotation:number}|null>(null);
+  const [rotation,setRotation]=useState(0);
+  function angle(event:PointerEvent<HTMLButtonElement>){
+    const box=event.currentTarget.getBoundingClientRect();
+    return Math.atan2(event.clientX-box.x-box.width/2,box.y+box.height/2-event.clientY);
+  }
+  function releaseWheel(pointer?:number){
+    if(!wheel.current||(pointer!==undefined&&pointer!==wheel.current.id))return;
+    wheel.current=null;analog.current=0;setRotation(0);
+  }
   const held=useRef(new Map<number,HTMLButtonElement>());
   function release(pointer:number){
+    releaseWheel(pointer);
     const button=held.current.get(pointer);
     held.current.delete(pointer);inputs.delete(pointer);
     if(button&&![...held.current.values()].includes(button))button.removeAttribute('data-held');
   }
   useEffect(()=>{
-    const clear=()=>{for(const pointer of held.current.keys())release(pointer);inputs.clear();};
+    const clear=()=>{releaseWheel();for(const pointer of held.current.keys())release(pointer);inputs.clear();};
     const ended=(event:globalThis.PointerEvent)=>release(event.pointerId);
     window.addEventListener('blur',clear);
     window.addEventListener('pointerup',ended);
@@ -97,7 +108,26 @@ export function TouchDrive({inputs}:{inputs:Map<number,DriveAction>}){
     <span>{caption}</span>
   </button>;
   return <div className="touch-drive" aria-label="Touch driving controls">
-    <div className="touch-steering">{pad('left','Steer left','Left')}{pad('right','Steer right','Right')}</div>
+    <div className="touch-steering">{method==='wheel'?<button type="button" className="touch-wheel" aria-label="Steering wheel"
+      data-held={rotation!==0} onPointerDown={event=>{
+        if(wheel.current||event.button!==0)return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        wheel.current={id:event.pointerId,angle:angle(event),rotation:0};
+      }} onPointerMove={event=>{
+        const held=wheel.current;
+        if(!held||held.id!==event.pointerId)return;
+        const next=angle(event),delta=next-held.angle;
+        held.angle=next;
+        held.rotation=Math.max(-115,Math.min(115,held.rotation+Math.atan2(Math.sin(delta),Math.cos(delta))*180/Math.PI));
+        analog.current=Math.max(-1,Math.min(1,held.rotation*wheelSensitivity/90));setRotation(held.rotation);
+      }} onPointerUp={ended} onPointerCancel={ended} onLostPointerCapture={ended}>
+      <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true" style={{rotate:rotation+'deg'}}>
+        <circle cx="32" cy="32" r="26" fill="#1b1a19" stroke="currentColor" strokeWidth="7"/>
+        <path d="M8 27l24 7 24-7M32 34v23" stroke="currentColor" strokeWidth="7" fill="none"/>
+        <circle cx="32" cy="33" r="7" fill="#dfb06c"/>
+      </svg>
+    </button>:method==='buttons'?<>{pad('left','Steer left','Left')}{pad('right','Steer right','Right')}</>:<small className="tilt-indicator">Tilt steering</small>}</div>
     <div className="touch-pedals">{pad('brake','Handbrake','Handbrake')}{pad('reverse','Brake or reverse','Brake')}{pad('throttle','Accelerate','Drive')}</div>
   </div>;
 }

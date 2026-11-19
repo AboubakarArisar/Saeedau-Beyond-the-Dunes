@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "Saeedau: Beyond the Dunes",
+  "short_name": "Saeedau",
+  "description": "Drive across Tharparkar in Saeedau: Beyond the Dunes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "theme_color": "#171614",
+  "background_color": "#171614",
+  "icons": [
+    {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

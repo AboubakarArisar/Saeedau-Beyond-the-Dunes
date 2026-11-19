@@ -31,7 +31,7 @@ try{
   const button=(page,name)=>page.getByRole('button',{name,exact:true});
   const setup=async page=>{
     await page.goto(url);
-    await button(page,'start journey').click();
+    await button(page,'Start driving').click();
     await expect(page.getByRole('group',{name:'Game mode'}).getByRole('button')).toHaveCount(5);
     await page.getByRole('button',{name:/Custom Journey Your start/}).click();
   };

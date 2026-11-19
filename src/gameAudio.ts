@@ -1,7 +1,7 @@
 import type {Vehicle} from './driving';
 import type {Season} from './seasons';
 
-export const defaults={master:.75,music:.65,engine:.38,environment:.35,mute:false};
+export const defaults={master:.75,music:.65,engine:.38,environment:.35,effects:.7,mute:false};
 export type AudioSettings=typeof defaults;
 export function preference<T>(key:string,fallback:T):T {
   try {return JSON.parse(localStorage.getItem('saeedau.'+key)??'null')??fallback;}
@@ -34,6 +34,7 @@ export function createGameAudio(){
     note[index]=(.14*Math.sin(2*Math.PI*1175*time)*Math.exp(-29*time)*attack+
       .15*Math.sin(2*Math.PI*1760*second)*Math.exp(-32*second)*nextAttack)*Math.min(1,(.18-time)/.018);
   }
+  const effects=context.createGain();effects.connect(master);
   let pickup:AudioBufferSourceNode|undefined;
   function clearPickup(){
     if(!pickup)return;
@@ -47,7 +48,7 @@ export function createGameAudio(){
       if(context.state!=='running')return;
       clearPickup();
       const source=context.createBufferSource();
-      pickup=source;source.buffer=chime;source.connect(master);
+      pickup=source;source.buffer=chime;source.connect(effects);
       source.onended=()=>{source.disconnect();if(pickup===source)pickup=undefined;};
       source.start();
     },
@@ -55,6 +56,7 @@ export function createGameAudio(){
       const idle={kekro:31,jeep:46,unique:74}[vehicle],speed=Math.min(1,motion.speed/100);
       const frequency=idle*(1+speed*1.65+(motion.throttle?.33:0));
       set(master.gain,active&&!settings.mute?settings.master:0);
+      set(effects.gain,settings.effects);
       set(engine.frequency,frequency);set(pulse.frequency,frequency*(vehicle==='kekro'?2:3));
       set(filter.frequency,vehicle==='unique'?380:vehicle==='jeep'?260:175);
       set(engineGain.gain,settings.engine*(.09+speed*.07+(motion.throttle?.05:0)));

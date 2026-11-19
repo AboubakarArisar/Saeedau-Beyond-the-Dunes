@@ -51,7 +51,7 @@ try{
   await page.goto(url);await button('Garage').click();
   await expect.poll(async()=>(await rider())?.gripError??100).toBeLessThan(.001);
   await settle(page);await shot('unique70-rider-garage');
-  await button('Back').click();await button('start journey').click();
+  await button('Back').click();await button('Start driving').click();
   await button('Start Free Journey').click();await centered(page);
   await page.keyboard.down('w');
   try{
@@ -96,7 +96,7 @@ try{
 
   const mobile=await browser.newPage({...devices['Pixel 7 landscape'],deviceScaleFactor:1,reducedMotion:'reduce'});
   await mobile.goto(url);
-  await mobile.getByRole('button',{name:'start journey',exact:true}).tap();
+  await mobile.getByRole('button',{name:'Start driving',exact:true}).tap();
   await mobile.getByRole('button',{name:'Start Free Journey',exact:true}).tap();
   await centered(mobile);await shot('centered-coins-mobile',mobile);
   await mobile.close();

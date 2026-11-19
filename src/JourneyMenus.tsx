@@ -112,7 +112,7 @@ export function JourneySetup({vehicle,selectVehicle,back,frame,assetStatus,mode,
     </div>
     <div className="showroom setup-showroom" ref={frame}>{assetStatus!=='ready'&&<p role="status">{assetMessage[assetStatus]}</p>}</div>
     <div className="mode-track" role="group" aria-label="Game mode">
-      {modeOrder.map((key,index)=><button key={key} aria-pressed={mode===key} onClick={()=>selectMode(key)}>
+      {modeOrder.map((key,index)=><button key={key} data-mode={key} aria-pressed={mode===key} onClick={()=>selectMode(key)}>
         <span className="mode-symbol" aria-hidden="true"><span>{String(index+1).padStart(2,'0')}</span>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><path d={modeCopy[key].icon} stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </span>

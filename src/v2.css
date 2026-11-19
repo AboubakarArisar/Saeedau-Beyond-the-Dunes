@@ -1,0 +1,52 @@
+:root {--game-charcoal:#171614;--game-ink:#fff5e5;--game-accent:#e8b477}
+.title-copy h1 {text-transform:uppercase}
+.title-copy .start-journey {margin-top:clamp(14px,3vh,30px);border-radius:10px;background:#f4c58e;color:#191715}
+.title-nav button,.title-nav button:first-child,.run-panel nav button,.game-files button {
+ border-radius:8px;border:1px solid #f6ddbb44;background:#23211eea;color:var(--game-ink);
+ min-height:44px;padding:8px 13px;
+}
+.game-files {
+ position:absolute;z-index:5;right:max(14px,env(safe-area-inset-right));
+ bottom:max(14px,env(safe-area-inset-bottom));display:flex;flex-wrap:wrap;
+ align-items:center;justify-content:end;gap:6px 9px;width:min(340px,45vw);
+ text-align:right;color:var(--game-ink);font-size:.75rem;
+}
+.game-files span,.game-files small {background:#171614e8;padding:4px 7px;border-radius:6px}
+.game-files p,.game-files progress {flex:1 0 100%;margin:0}
+.game-files p {background:#171614;padding:6px;border-radius:6px}
+.run-panel {border-color:#ecd2ac44;background:#191816ef;border-radius:18px;max-height:calc(100dvh - 32px);overflow:auto}
+.run-panel nav button:first-child {background:var(--game-accent);color:#191614}
+.steering-settings,.audio-settings {border:1px solid #eed6ad44;border-radius:9px;margin:8px 0;padding:9px 12px}
+.steering-settings label,.audio-settings>label {display:flex;justify-content:space-between;gap:8px;align-items:center;min-height:36px}
+.steering-settings input,.audio-settings input {accent-color:var(--game-accent);max-width:43%}
+.run-panel select {color-scheme:dark;background:#211e1b;color:#fff5e5;padding:6px;border:1px solid #eed6ad66;border-radius:6px}
+.touch-steering .touch-wheel {width:clamp(72px,25dvh,112px);padding:4px;color:#d9c4a7}
+.touch-wheel svg {width:100%;height:auto;transition:rotate .2s ease-out;pointer-events:none}
+.touch-wheel[data-held=true] svg {transition:none}
+.tilt-indicator {padding:6px 9px;background:#171614dd;border-radius:8px;color:#f5d4a7}
+@media(max-width:680px) and (orientation:portrait) {
+ .game-files {width:calc(100% - 28px);justify-content:start;text-align:left}
+ .title-copy {padding-bottom:90px}
+}
+.touch-layout .radio-mini {width:min(220px,36vw);height:auto;min-height:42px;padding:3px;display:grid;grid-template-columns:36px minmax(0,1fr) 36px;gap:4px}
+.radio-mini .radio-title {max-width:100%;font-size:.7rem;margin:0}
+.radio-mini .radio-icon {height:36px;min-width:36px;padding:0;display:grid;place-items:center;border:0;border-radius:8px;background:#282522}
+.mode-track button[data-mode=journey] {--mode-accent:#dfbc85}
+.mode-track button[data-mode=race] {--mode-accent:#f0a28e}
+.mode-track button[data-mode=challenge] {--mode-accent:#b5c9eb}
+.mode-track button[data-mode=explorer] {--mode-accent:#afd0a8}
+.mode-track button[data-mode=custom] {--mode-accent:#e8bd91}
+.mode-track button[aria-pressed=true] {border-color:var(--mode-accent);color:var(--mode-accent)}
+.mode-track button .mode-symbol svg {color:var(--mode-accent)}
+.garage-specs div {border-color:#eee0ca3b}
+.garage-showroom .showroom-arrow,.journey-setup .showroom-arrow {border-radius:8px}
+@media(max-height:440px) and (orientation:landscape) {
+ .run-panel {width:min(560px,calc(100% - 2rem));padding:16px 20px}
+ .run-panel h1 {font-size:clamp(1.7rem,5vw,2.3rem);margin:7px 0 12px}
+}
+
+@media(prefers-reduced-motion:reduce){.touch-wheel svg {transition:none}}
+.touch-steering .touch-wheel[data-held=true] {background:#241b16d9;color:#ffd695;border-color:#ffdda8}
+@media(max-width:680px) and (orientation:portrait) {
+ .run-panel {left:50%;translate:-50% 0}
+}

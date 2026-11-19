@@ -33,7 +33,7 @@ try {
   const button=name=>page.getByRole('button',{name,exact:true});
   const shot=name=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts','v15-'+name+'.png')});
   await page.goto(base);
-  await button('start journey').click();
+  await button('Start driving').click();
   await shot('modes');
   await button('Garage').click();
   await button('Previous vehicle').click();await shot('garage');
@@ -96,7 +96,7 @@ try {
   for(const [name,distance,visited] of captures){
     const kit=page.waitForResponse(response=>response.url().endsWith('/settlement/kit.glb')&&response.ok());
     await page.goto(`${base}/?worldShot=${distance}&visited=${visited}`);
-    await button('start journey').click();
+    await button('Start driving').click();
     await button('Start Free Journey').click();
     await kit;
     await page.waitForTimeout(540);
@@ -110,7 +110,7 @@ try {
   for(const mode of ['Free Journey','Speed Racing','Checkpoint Challenge','Desert Explorer']){
     const query=mode==='Checkpoint Challenge'?'timeout=1':mode==='Desert Explorer'?'worldShot=31':'worldShot=6999&visited=6';
     await page.goto(base+'/?'+query);
-    await button('start journey').click();
+    await button('Start driving').click();
     await page.getByRole('group',{name:'Game mode'}).getByRole('button',{name:new RegExp(mode)}).click();
     if(mode==='Speed Racing'){
       await page.evaluate(()=>{
@@ -150,7 +150,7 @@ try {
     const setup=new URLSearchParams({worldShot:obstacle.distance,offset:obstacle.offset,heading:obstacle.heading,solid:1});
     const kit=page.waitForResponse(response=>response.url().endsWith('/houses/kit.glb')&&response.ok());
     await page.goto(base+'/?'+setup);await kit;
-    await button('start journey').click();await button('Start Free Journey').click();
+    await button('Start driving').click();await button('Start Free Journey').click();
     const state=async()=>JSON.parse(await page.locator('.world').getAttribute('data-verification')??'null');
     await page.keyboard.down('w');
     try{

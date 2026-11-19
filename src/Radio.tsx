@@ -31,6 +31,7 @@ export function Radio({mobile,visible,volume,music,setMusic,bindings}:{mobile:bo
   const audio=useRef<HTMLAudioElement>(null);
   const urls=useRef(new Set<string>()), nextId=useRef(0), loaded=useRef<number|undefined>(undefined);
   const heard=useRef(new Set<number>());
+  const autoplay=useRef(true),seeking=useRef(false);
   const effectiveVolume=muted?0:volume;
 
   const tracks=source==='builtin'?builtInTracks:personalTracks;
@@ -64,10 +65,11 @@ export function Radio({mobile,visible,volume,music,setMusic,bindings}:{mobile:bo
 
   function selectSource(value:Source){
     if(value===source)return;
-    clearAudio();setSource(value);
+    autoplay.current=false;clearAudio();setSource(value);
   }
   function togglePanel(){(mobile?setMobileExpanded:setDesktopExpanded)(!expanded);}
-  function play(track:Track){
+  function play(track:Track,automatic=false){
+    if(!automatic)autoplay.current=false;
     const element=audio.current;
     if(!element)return;
     setLocalError('');
@@ -77,12 +79,33 @@ export function Radio({mobile,visible,volume,music,setMusic,bindings}:{mobile:bo
       loaded.current=track.id;element.src=track.url;
       setSelection(previous=>({...previous,[source]:track.id}));setLocalTime([0,0]);
     }
-    void element.play().catch(error=>{
+    void element.play().then(()=>{autoplay.current=false;}).catch(error=>{
+      if(error.name==='NotAllowedError'&&automatic)return;
       if(loaded.current===track.id&&error.name!=='AbortError')setLocalError(source==='builtin'?
         'Could not play this soundtrack track. Try again or choose another track.':
         'Cannot play this file. Try a supported, uncorrupted audio file.');
     });
   }
+  useEffect(()=>{
+    const first=builtInTracks[0];
+    if(!first||source!=='builtin'||!autoplay.current)return;
+    if(effectiveVolume>0)play(first,true);
+    else setSelection(previous=>previous.builtin===undefined?{...previous,builtin:first.id}:previous);
+    const listeners=new AbortController();
+    const retry=()=>{
+      if(autoplay.current&&effectiveVolume>0)play(first,true);
+      listeners.abort();
+    };
+    window.addEventListener('click',retry,{signal:listeners.signal});
+    window.addEventListener('keydown',retry,{signal:listeners.signal});
+    return ()=>listeners.abort();
+  },[builtInTracks,source,effectiveVolume]);
+  useEffect(()=>{
+    const listeners=new AbortController();
+    const finish=()=>{if(seeking.current){seeking.current=false;syncTime();}};
+    for(const type of ['pointerup','pointercancel','blur'])window.addEventListener(type,finish,{signal:listeners.signal});
+    return ()=>listeners.abort();
+  },[]);
   function toggle(){
     if(current){if(audio.current?.paused)play(current);else audio.current?.pause();}
     else if(tracks.length)play(tracks[0]);
@@ -134,7 +157,7 @@ export function Radio({mobile,visible,volume,music,setMusic,bindings}:{mobile:bo
   const trackTitle=(track:Track)=>track.artist?track.name+' · '+track.artist:track.name;
   const title=current?trackTitle(current):source==='builtin'?soundtrackMessage:'Choose music from this device';
   const time=localTime;
-  function syncTime(){const element=audio.current;if(element)setLocalTime([element.currentTime,Number.isFinite(element.duration)?element.duration:0]);}
+  function syncTime(){const element=audio.current;if(element&&!seeking.current)setLocalTime([element.currentTime,Number.isFinite(element.duration)?element.duration:0]);}
   return <>
     <audio ref={audio} preload="none" onPlay={()=>setLocalPlaying(true)} onPause={()=>setLocalPlaying(false)}
       onTimeUpdate={syncTime} onLoadedMetadata={syncTime} onEnded={()=>{
@@ -144,11 +167,14 @@ export function Radio({mobile,visible,volume,music,setMusic,bindings}:{mobile:bo
       onError={()=>{if(loaded.current!==undefined){setLocalPlaying(false);setLocalError(source==='builtin'?
         'This soundtrack track could not be loaded. Try Next or select another track.':
         'This file cannot be decoded by your browser.');}}}/>
-    {visible&&(mobile&&!expanded?<button className="radio radio-mini" aria-label="Expand" title="Thar Radio" aria-expanded={false} onClick={togglePanel}>
+    {visible&&(mobile&&!expanded?<aside data-radio className="radio radio-mini" aria-label="Thar Radio"><button className="radio-icon" aria-label="Expand" title="Thar Radio" aria-expanded={false} onClick={togglePanel}>
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M9 18V5l11-2v13M9 9l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/>
       </svg>
-    </button>:<aside data-radio className={'radio'+(expanded?' radio-expanded':'')} aria-label="Thar Radio">
+    </button>
+      <span className="radio-title" title={title}>{current?.name??'Thar Radio'}</span>
+      <button className="radio-icon" disabled={!tracks.length} onClick={toggle} aria-label={playing?'Pause music':'Play music'}>{playing?'Ⅱ':'▶'}</button>
+    </aside>:<aside data-radio className={'radio'+(expanded?' radio-expanded':'')} aria-label="Thar Radio">
       <header><span>THAR RADIO <small>{{local:'MY MUSIC',builtin:'SOUNDTRACK'}[source]}</small></span>
         <button aria-expanded={expanded} onClick={togglePanel}>{expanded?'Collapse':'Expand'}</button></header>
       <div className="radio-title" title={title}>{title}</div>
@@ -169,7 +195,9 @@ export function Radio({mobile,visible,volume,music,setMusic,bindings}:{mobile:bo
         <div className="radio-time">
           <span>{clock(time[0])}</span>
           <input type="range" aria-label="Seek" min="0" max={time[1]||1} step=".1" value={time[0]} disabled={!time[1]}
-            onChange={event=>{if(audio.current){audio.current.currentTime=Number(event.target.value);syncTime();}}}/>
+            onPointerDown={()=>{seeking.current=true;}} onChange={event=>{if(audio.current){
+              const value=Number(event.target.value);audio.current.currentTime=value;setLocalTime([value,time[1]]);
+            }}}/>
           <span>{clock(time[1])}</span>
         </div>
         <label className="radio-volume">Music volume <input type="range" min="0" max="1" step=".01" value={music} onChange={event=>setMusic(Number(event.target.value))}/></label>

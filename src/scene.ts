@@ -17,7 +17,7 @@ import {collectCoins,coinsBetween,type Coin} from './coins';
 import {createCoinField} from './coinField';
 
 export function mount(host: HTMLElement, report: (speed:number, position:number, progress:number, motion:Motion, run:Run) => void, options: {
-  paused:boolean;shadows:boolean;vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
+  paused:boolean;shadows:boolean;resolution:number;analog:{current:number};vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
   touch:Map<number,DriveAction>;reset:number;customRoute?:JourneyRoute;recenter:boolean;season:Season;mode:Mode;preview:boolean;finish:boolean;
   garage:boolean;previewFrame:{current:HTMLDivElement|null};previewAngle:number;previewZoom:number;
   vehicleLoad:(vehicle:Vehicle,status:'ready'|'error')=>void;
@@ -304,9 +304,14 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   let disposed=false;
   const loader=new GLTFLoader();
   const files={jeep:'long-chassis',kekro:'kekro',unique:'unique70'} as const;
-  for(const vehicle of Object.keys(files) as Vehicle[]){
+  const requestedVehicles=new Set<Vehicle>();
+  function requestVehicle(vehicle:Vehicle){
+    if(requestedVehicles.has(vehicle))return;
+    requestedVehicles.add(vehicle);
     void loadVehicle(vehicle);
   }
+  requestVehicle('jeep');
+  requestVehicle(options.vehicle);
   async function loadVehicle(vehicle:Vehicle){
     let model:T.Group|undefined;
     try{
@@ -382,7 +387,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   renderer.domElement.addEventListener('lostpointercapture',release,{signal});
   renderer.domElement.addEventListener('pointermove',move,{signal});
   renderer.domElement.addEventListener('wheel',wheel,{signal,passive:false});
-  let pixelRatio=options.mobile?Math.min(1,devicePixelRatio):Math.min(1.5,devicePixelRatio);
+  let pixelRatio=Math.min(options.resolution,devicePixelRatio);
   let frameAverage=16,qualityCheck=performance.now(),previewWidth=1,previewHeight=1;
   const resize=()=>{
     const width=host.clientWidth,height=host.clientHeight;
@@ -429,7 +434,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     if(!document.hidden){
       frameAverage+=.055*(Math.min(elapsed,150)-frameAverage);
       if(now-qualityCheck>2400){
-        const ceiling=Math.min(options.mobile?1:1.5,devicePixelRatio);
+        const ceiling=Math.min(options.resolution,devicePixelRatio);
         const ratio=frameAverage>34?Math.max(Math.min(.65,ceiling),pixelRatio-.12):frameAverage<23?Math.min(ceiling,pixelRatio+.08):pixelRatio;
         if(ratio!==pixelRatio){pixelRatio=ratio;resize();}
         qualityCheck=now;
@@ -444,7 +449,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       options.coinPickup(0);
       steering=0;lastImpact=-Infinity;first=true;orbit=zoom=0;release();
     }
-    if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;if(!options.preview)first=true;orbit=zoom=0;release();}
+    if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;requestVehicle(activeVehicle);car.speed=0;if(!options.preview)first=true;orbit=zoom=0;release();}
     if(previousPreview!==options.preview||previousGarage!==options.garage){
       previousPreview=options.preview;previousGarage=options.garage;first=true;orbit=zoom=0;release();
       options.previewAngle=options.previewZoom=0;
@@ -455,7 +460,8 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       if(previousPaused){keys.clear();options.touch.clear();}
     }
     const touch=[...options.touch.values()];
-    const steer=+(keys.has('KeyD')||keys.has('ArrowRight')||touch.includes('right'))-+(keys.has('KeyA')||keys.has('ArrowLeft')||touch.includes('left'));
+    const digitalSteer=+(keys.has('KeyD')||keys.has('ArrowRight')||touch.includes('right'))-+(keys.has('KeyA')||keys.has('ArrowLeft')||touch.includes('left'));
+    const steer=digitalSteer||options.analog.current;
     const throttle=keys.has('KeyW')||keys.has('ArrowUp')||touch.includes('throttle');
     const reverse=keys.has('KeyS')||keys.has('ArrowDown')||touch.includes('reverse');
     const parked=options.title;

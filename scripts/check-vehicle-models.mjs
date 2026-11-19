@@ -59,7 +59,7 @@ try{
     console.log(name,JSON.stringify(inGarage));
     await shot('garage');
     await button('Back').click();
-    await button('start journey').click();
+    await button('Start driving').click();
     await expect.poll(async()=>{
       const state=await rig();
       return state?.vehicle===vehicle&&state.wheels.length===wheels?state.margin:-100;

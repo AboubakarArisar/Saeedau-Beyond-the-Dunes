@@ -37,11 +37,10 @@ async function checkSoundtrack(browser,url){
   });
   try{
     await page.goto(url);
-    await button('start journey').click();await button('Start Free Journey').click();await button('Expand').click();
+    await button('Start driving').click();await button('Start Free Journey').click();await button('Expand').click();
     await expect(radio.getByRole('status')).toContainText('Could not load the Thar soundtrack');
     await button('Retry soundtrack').click();
     await expect(button(first)).toBeVisible();
-    await button('Play music').click();
     await expect(title).toHaveText(first);
     await expect(button('Pause music')).toBeVisible();
     await button('Pause music').click();
@@ -62,7 +61,7 @@ async function checkSoundtrack(browser,url){
         {once:true,signal:listener.signal});
       element.playbackRate=8;
     }));
-    await expect.poll(()=>audio.evaluate(element=>element.currentTime)).toBeLessThan(2);
+    await expect.poll(()=>audio.evaluate(element=>!element.paused&&element.currentTime<element.duration-.2)).toBe(true);
     await expect(title).toHaveText(second);
     await button('Shuffle').click();await button('Next').click();
     await expect(title).not.toHaveText(second);
@@ -96,18 +95,15 @@ try {
   await bundled.route('**/*',route=>route.request().url().startsWith(url+'/')?route.continue():route.abort());
   const manifest=await (await bundled.request.get(url+'/audio/thar-radio/manifest.json')).json();
   expect(manifest).toHaveLength(3);
-  const requested=[];
-  bundled.on('request',request=>{if(request.resourceType()==='media')requested.push(request.url());});
   const bundledButton=name=>bundled.getByRole('button',{name,exact:true});
   const bundledAudio=bundled.locator('audio');
   const bundledState=()=>bundledAudio.evaluate(audio=>({file:decodeURIComponent(new URL(audio.src).pathname.split('/').at(-1)),
     time:audio.currentTime,duration:audio.duration,paused:audio.paused}));
   await bundled.goto(url);
-  await bundledButton('start journey').click();await bundledButton('Start Free Journey').click();await bundledButton('Expand').click();
+  await bundledButton('Start driving').click();await bundledButton('Start Free Journey').click();await bundledButton('Expand').click();
   await expect(bundled.locator('.radio-queue li')).toHaveCount(3);
   await expect(bundledAudio).toHaveCount(1);
-  expect(requested).toEqual([]);
-  await bundledButton('Play music').click();
+  await expect(bundledButton('Pause music')).toBeVisible();
   for(const [index,track] of manifest.entries()){
     if(index)await bundledButton('Next').click();
     await expect(bundled.locator('.radio-title')).toHaveText(track.title+' · '+track.artist);
@@ -120,11 +116,11 @@ try {
   await expect.poll(async()=>(await bundledState()).file).toBe(manifest[1].file);
   const beforeMenus=(await bundledState()).time;
   await bundledButton('Pause').click();
-  bundled.once('dialog',dialog=>dialog.accept());await bundledButton('Main menu').click();
+  bundled.once('dialog',dialog=>dialog.accept());await bundledButton('Return to menu').click();
   await bundledButton('Garage').click();
   await expect.poll(async()=>(await bundledState()).time).toBeGreaterThan(beforeMenus);
   expect(await bundledState()).toMatchObject({file:manifest[1].file,paused:false});
-  await bundledButton('Back').click();await bundledButton('start journey').click();
+  await bundledButton('Back').click();await bundledButton('Start driving').click();
   await bundledButton('Start Free Journey').click();
   await expect(bundledButton('Pause music')).toBeVisible();
   expect(await bundledState()).toMatchObject({file:manifest[1].file,paused:false});
@@ -136,7 +132,7 @@ try {
   const shot=name=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts',name)});
   const media=()=>page.locator('audio').evaluate(audio=>({paused:audio.paused,time:audio.currentTime,volume:audio.volume}));
   await page.goto(url);
-  await button('start journey').click();await button('Start Free Journey').click();await button('Expand').click();
+  await button('Start driving').click();await button('Start Free Journey').click();await button('Expand').click();
   await button('My Music').click();
   const input=page.locator('input[type=file]');
   await input.setInputFiles([{name:'Dune-one.wav',mimeType:'audio/wav',buffer:wave(220)},{name:'Dune-two.wav',mimeType:'audio/wav',buffer:wave(330)}]);
@@ -161,10 +157,10 @@ try {
   await expect(button('Dune-two')).toHaveAttribute('aria-current','true');
   await button('Play music').click();
   await button('Pause').click();
-  page.once('dialog',dialog=>dialog.accept());await button('Main menu').click();
+  page.once('dialog',dialog=>dialog.accept());await button('Return to menu').click();
   await button('Garage').click();await expect(page.locator('[data-radio]')).toHaveCount(0);
   await expect.poll(async()=>(await media()).paused).toBe(false);
-  await button('Back').click();await button('start journey').click();
+  await button('Back').click();await button('Start driving').click();
   await button('Start Free Journey').click();
   await expect(button('Pause music')).toBeVisible();
   await shot('fix-local-expanded.png');
@@ -178,7 +174,7 @@ try {
   await expect(page.getByRole('complementary',{name:'Thar Radio'}).getByRole('status')).toContainText('Unrecognized');
   await button('Clear playlist').click();
   await expect.poll(async()=>(await media()).paused).toBe(true);
-  await button('Pause').click();await button('Settings').click();
+  await button('Pause').click();await button('Audio settings').click();
   await page.getByLabel('Mute all audio').check();
   await expect.poll(async()=>(await media()).volume).toBe(0);
   await page.reload();await button('Settings').click();

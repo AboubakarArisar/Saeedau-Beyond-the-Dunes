@@ -18,14 +18,14 @@ try {
   };
   const desktop=await browser.newPage({viewport:{width:1366,height:768},reducedMotion:'reduce'});
   await ready(desktop);
-  await expect(desktop.getByRole('heading',{name:'saeedau.'})).toBeVisible();
+  await expect(desktop.getByRole('heading',{name:'Saeedau'})).toBeVisible();
   await expect(desktop.locator('.panel')).toHaveCount(0);
   await shot(desktop,'fix-title-1366.png');
   await desktop.setViewportSize({width:1920,height:1080});
   await desktop.waitForTimeout(400);
   await shot(desktop,'fix-title-1920.png');
   await desktop.setViewportSize({width:960,height:540});
-  await desktop.getByRole('button',{name:'start journey'}).click();
+  await desktop.getByRole('button',{name:'Start driving'}).click();
   await desktop.getByRole('button',{name:'Start Free Journey',exact:true}).click();
   await desktop.keyboard.down('w');
   try {await expect.poll(async()=>Number(await desktop.locator('.hud strong').textContent()),{timeout:15000}).toBeGreaterThan(3);}
@@ -47,7 +47,7 @@ try {
   await ready(mobile);
   const rotate=mobile.getByRole('dialog',{name:'rotate your phone'});
   await expect(rotate).toHaveCount(0);
-  await mobile.getByRole('button',{name:'start journey'}).tap();
+  await mobile.getByRole('button',{name:'Start driving'}).tap();
   await mobile.getByRole('button',{name:'Start Free Journey',exact:true}).tap();
   await expect(rotate).toBeVisible();
   expect(await mobile.evaluate(()=>window.landscapeAttempts)).toBe(1);
@@ -103,7 +103,7 @@ try {
   await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
   await mobile.getByRole('button',{name:'Expand'}).tap();
   await expect(mobile.getByRole('button',{name:'My Music'})).toBeVisible();
-  await mobile.getByRole('button',{name:'Play music'}).tap();
+  await expect(mobile.getByRole('button',{name:'Pause music'})).toBeVisible();
   await expect.poll(()=>mobile.locator('audio').evaluate(audio=>audio.duration)).toBeGreaterThan(10);
   await mobile.getByRole('slider',{name:'Seek'}).fill('10');
   await expect.poll(()=>mobile.locator('audio').evaluate(audio=>audio.currentTime)).toBeGreaterThanOrEqual(10);

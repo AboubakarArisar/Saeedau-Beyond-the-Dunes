@@ -14,7 +14,7 @@ try{
   const speed=()=>page.locator('.hud strong');
   const shot=name=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts',`fix-${name}.png`)});
   await page.goto('http://127.0.0.1:'+port);
-  await button('start journey').click();
+  await button('Start driving').click();
   await button('Start Free Journey').click();
   await expect(page.locator('.hud-distance')).toContainText('to Chhor');
   await page.waitForTimeout(700);
@@ -44,7 +44,7 @@ try{
   await page.keyboard.press('r');await expect(speed()).toHaveText('0');
   for(const vehicle of ['Kekro','Unique 70 motorcycle','Long Chassis jeep']){
     await button('Pause').click();page.once('dialog',dialog=>dialog.accept());await button('Main menu').click();
-    await button('start journey').click();await button('Previous vehicle').click();await button('Start Free Journey').click();
+    await button('Start driving').click();await button('Previous vehicle').click();await button('Start Free Journey').click();
     await expect(page.locator('.hud-vehicle')).toHaveText(vehicle);
     await expect(speed()).toHaveText('0');
     await page.keyboard.down('w');

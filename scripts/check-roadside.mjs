@@ -61,7 +61,7 @@ try{
     await page.goto(base+'/?'+new URLSearchParams(parameters));
     await page.evaluate(value=>localStorage.setItem('saeedau.vehicle',JSON.stringify(value)),vehicle);
     await page.reload();
-    await button('start journey').click();
+    await button('Start driving').click();
     if(mode!=='Free Journey')await page.getByRole('group',{name:'Game mode'}).getByRole('button',{name:new RegExp(mode)}).click();
     await button('Start '+mode).click();
     await expect(count()).toBeVisible();

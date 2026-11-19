@@ -14,6 +14,9 @@ import './style.css';
 import './title.css';
 import './hud.css';
 import './mobile.css';
+import './v2.css';
+import {GameFiles} from './GameFiles';
+import {useSteering} from './mobileSteering';
 import {coinValue} from './coins';
 import {planJourney,type JourneyRoute,type JourneySelection} from './customJourney';
 
@@ -60,13 +63,16 @@ function App(){
  const [routeOpen,setRouteOpen]=useState(false);
  const rotate=mobile&&portrait&&!menu&&!failed;
  const touch=useRef(new Map<number,DriveAction>());
- const [shadows,setShadows]=useState(()=>preference('shadows',!matchMedia(touchDevice).matches));
+ const drivingSteering=useSteering(mobile&&!rotate&&!menu&&!failed);
+ const [graphics,setGraphics]=useState(()=>preference<'low'|'medium'|'high'>('graphics',
+   preference('shadows',!matchMedia(touchDevice).matches)?'high':matchMedia(touchDevice).matches?'low':'medium'));
+ const shadows=graphics==='high',resolution=graphics==='high'?1.5:graphics==='medium'?1:.8;
  const [settings,setSettings]=useState(()=>({...defaults,...preference('audio',defaults)}));
  const [bindings,setBindings]=useState(()=>({...shortcuts,...preference('radio.keys',shortcuts)}));
  const [keyError,setKeyError]=useState('');
  const sound=useRef<ReturnType<typeof createGameAudio>|null>(null);
  const motion=useRef<Motion>({speed:0,sand:false,throttle:false});
- const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,customRoute:undefined as JourneyRoute|undefined,recenter,season,mode,preview:false,garage:false,finish:false,previewFrame,previewAngle:0,previewZoom:0,
+ const options=useRef({paused:true,shadows,resolution,analog:drivingSteering.analog,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,customRoute:undefined as JourneyRoute|undefined,recenter,season,mode,preview:false,garage:false,finish:false,previewFrame,previewAngle:0,previewZoom:0,
   vehicleLoad:(key:Vehicle,status:'ready'|'error')=>setVehicleAssets(previous=>({...previous,[key]:status})),
   coinPickup:(count:number)=>{
    const delta=count-displayedCoins.current;
@@ -77,6 +83,7 @@ function App(){
  });
  options.current.paused=menu!==''||rotate;
  options.current.shadows=shadows;
+ options.current.resolution=resolution;
  options.current.vehicle=vehicle;
  options.current.title=menu==='home'||menu==='credits';
  options.current.mobile=mobile;
@@ -120,7 +127,7 @@ function App(){
   if(event.code!=='Escape'||event.repeat)return;
   if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
   touch.current.clear();
-  setMenu(current=>current===''?'pause':current==='pause'?'':current==='settings'?settingsBack.current:current==='garage'?garageBack.current:'home');
+  setMenu(current=>current===''?'pause':current==='pause'?'':(current==='settings'||current==='audio'||current==='controls')?settingsBack.current:current==='garage'?garageBack.current:'home');
  }; window.addEventListener('keydown',key);return ()=>window.removeEventListener('keydown',key);},[]);
  useEffect(()=>{savePreference('vehicle',vehicle);},[vehicle]);
  useEffect(()=>{savePreference('audio',settings);savePreference('radio.keys',bindings);},[settings,bindings]);
@@ -148,6 +155,7 @@ function App(){
   options.current.customRoute=selectedRoute;
   if(selectedRoute)savePreference('customJourney',selection);
   if(mobile)void requestLandscape();
+  if(mobile&&drivingSteering.settings.method==='tilt'&&drivingSteering.sensor==='idle')void drivingSteering.enableTilt();
   setRouteOpen(false);
   savedRun.current=false;
   announcedOrigin.current=false;
@@ -184,12 +192,13 @@ function App(){
  return <main className={mobile?'touch-layout':undefined}>
   <div className="world" ref={host}/>
   <div className="game-interface" inert={rotate}>
+  <div hidden={menu!=='home'||failed}><GameFiles visible={menu==='home'&&!failed}/></div>
   {failed?<section className="panel"><h1>WebGL unavailable</h1><p>Enable hardware acceleration and reload to start driving.</p></section>:menu==='home'?<section className="title-screen">
     <div className="title-copy">
-      <h1>saeedau.</h1><p className="title-subtitle">beyond the dunes</p>
-      <p className="title-description">a journey through the heart of thar.</p>
-      <button className="start-journey" onClick={()=>setMenu('setup')}>start journey</button>
-      <nav className="title-nav" aria-label="Main menu">{['Garage','Settings','Credits'].map(label=><button key={label} onClick={()=>{settingsBack.current=garageBack.current='home';setMenu(label.toLowerCase());}}>{label}</button>)}</nav>
+      <h1>Saeedau</h1><p className="title-subtitle">Beyond the Dunes</p>
+
+      <button className="start-journey" onClick={()=>setMenu('setup')}>Start driving</button>
+      <nav className="title-nav" aria-label="Main menu">{['Garage','Game Modes','Settings','Credits'].map(label=><button key={label} onClick={()=>{settingsBack.current=garageBack.current='home';setMenu(label==='Game Modes'?'setup':label.toLowerCase());}}>{label}</button>)}</nav>
     </div>
   </section>:menu==='credits'?<Credits back={()=>setMenu('home')}/>:menu==='setup'?
    <JourneySetup {...preview} mode={mode} selectMode={setMode} selection={selection} selectJourney={setSelection} validJourney={Boolean(selectedRoute)} season={season} selectSeason={setSeason}
@@ -206,11 +215,29 @@ function App(){
    <dl className="run-breakdown">{Object.entries(scored.breakdown).filter(([label,value])=>label!=='Coins'&&value!==0).map(([label,value])=><React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
    <nav><button onClick={startRun}>Play again</button><button onClick={()=>setMenu('setup')}>Journey setup</button><button onClick={()=>setMenu('home')}>Main menu</button></nav>
   </section>:menu?<section className="panel run-panel">
-   <small>{activeRoute?activeRoute.from+' → '+activeRoute.to:'THAR DESERT / UMERKOT TO SAEEDAU'}</small><h1>{menu==='pause'?'Journey paused':'Settings'}</h1>
-   {menu==='settings'&&<label><input type="checkbox" checked={shadows} onChange={event=>{setShadows(event.target.checked);localStorage.setItem('saeedau.shadows',String(event.target.checked));}}/> Dynamic shadows</label>}
+   <small>{activeRoute?activeRoute.from+' → '+activeRoute.to:'THAR DESERT / UMERKOT TO SAEEDAU'}</small><h1>{menu==='pause'?'Journey paused':menu==='controls'?'Controls':menu==='audio'?'Audio settings':'Settings'}</h1>
+   {(menu==='settings'||menu==='controls')&&<fieldset className="steering-settings"><legend>Controls</legend>
+    <label>Steering method <select value={drivingSteering.settings.method} onChange={event=>{
+     const method=event.target.value as typeof drivingSteering.settings.method;
+     drivingSteering.setSettings({...drivingSteering.settings,method});
+     if(method==='tilt'&&drivingSteering.sensor!=='active')void drivingSteering.enableTilt();
+    }}><option value="buttons">Left / right buttons</option><option value="wheel">Virtual steering wheel</option><option value="tilt">Tilt steering</option></select></label>
+    {(['tilt','deadZone','wheel'] as const).map((key,index)=><label key={key}>{['Tilt sensitivity','Steering dead zone','Wheel sensitivity'][index]}
+     <input type="range" min={key==='deadZone'?0:.4} max={key==='deadZone'?18:2.5} step={key==='deadZone'?1:.1}
+      value={drivingSteering.settings[key]} onChange={event=>drivingSteering.setSettings({...drivingSteering.settings,[key]:Number(event.target.value)})}/></label>)}
+    {drivingSteering.settings.method==='tilt'&&<>
+     <button onClick={drivingSteering.calibrate} disabled={drivingSteering.sensor!=='active'}>Calibrate</button>
+     {drivingSteering.sensor!=='active'&&<button onClick={()=>void drivingSteering.enableTilt()}>Enable tilt</button>}
+     <p role="status">{{idle:'Enable motion controls to use tilt.',waiting:'Waiting for motion data…',active:'Tilt sensor active',unavailable:'Tilt unavailable. Steering buttons are active.'}[drivingSteering.sensor]}</p>
+    </>}
+    {!mobile&&<small>WASD or arrow keys to drive · Space to brake · Drag to orbit · Scroll to zoom</small>}
+   </fieldset>}
+   {menu==='settings'&&<label>Graphics quality <select value={graphics} onChange={event=>{
+     const quality=event.target.value as typeof graphics;setGraphics(quality);savePreference('graphics',quality);
+   }}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>}
    {menu==='settings'&&<p><label><input type="checkbox" checked={recenter} onChange={event=>{setRecenter(event.target.checked);savePreference('camera.recenter',event.target.checked);}}/> Recenter chase camera after orbiting</label></p>}
-   {menu==='settings'&&<fieldset className="audio-settings"><legend>Audio</legend>
-    {(['master','music','engine','environment'] as const).map(key=><label key={key}>{key[0].toUpperCase()+key.slice(1)} volume
+   {(menu==='settings'||menu==='audio')&&<fieldset className="audio-settings"><legend>Audio</legend>
+    {(['master','music','engine','effects','environment'] as const).map(key=><label key={key}>{key[0].toUpperCase()+key.slice(1)} volume
      <input type="range" min="0" max="1" step=".01" value={settings[key]} onChange={event=>adjust(key,Number(event.target.value))}/>
     </label>)}
     <label><input type="checkbox" checked={settings.mute} onChange={event=>adjust('mute',event.target.checked)}/> Mute all audio</label>
@@ -229,9 +256,9 @@ function App(){
     </details>
    </fieldset>}
    {menu==='pause'&&run.mode==='explorer'&&<details open><summary>Discoveries · {found.length} / {places.length}</summary><ul>{places.map(place=><li key={place.name}>{found.includes(place)?'✓ ':''}{place.name}</li>)}</ul></details>}
-   <nav>{menu==='pause'?<><button onClick={enter}>Resume</button><button onClick={()=>{if(window.confirm('Restart this run?'))startRun();}}>Restart</button><button onClick={()=>{settingsBack.current='pause';setMenu('settings');}}>Settings</button>
+   <nav>{menu==='pause'?<><button onClick={enter}>Resume</button><button onClick={()=>{if(window.confirm('Restart this run?'))startRun();}}>Restart</button><button onClick={()=>{settingsBack.current='pause';setMenu('controls');}}>Controls</button><button onClick={()=>{settingsBack.current='pause';setMenu('audio');}}>Audio settings</button>
     {run.mode==='explorer'&&<button onClick={()=>{options.current.finish=true;}}>Finish expedition</button>}
-    {run.mode==='journey'&&run.leg===7&&<button onClick={()=>{options.current.finish=true;}}>Finish journey</button>}<button onClick={exitRun}>Main menu</button></>:<button onClick={()=>setMenu(settingsBack.current)}>Back</button>}</nav>
+    {run.mode==='journey'&&run.leg===7&&<button onClick={()=>{options.current.finish=true;}}>Finish journey</button>}<button onClick={exitRun}>Return to menu</button></>:<button onClick={()=>setMenu(settingsBack.current)}>Back</button>}</nav>
   </section>:<>
    <aside className="hud" aria-label="Driving dashboard">
     <div className="hud-speed"><strong>{stats[0]}</strong><span>km/h</span></div>
@@ -274,7 +301,7 @@ function App(){
     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>:'Pause'}</button>
    {run.countdown>0&&<div className="race-countdown" role="status">{Math.ceil(run.countdown)}</div>}
    {announcement&&<aside className="checkpoint-toast" role="status"><small>{leg===stops.length-1?'Saeedau arrival':leg===0?'Journey begins':'Checkpoint reached'}</small>{announcement}</aside>}
-   {mobile?(!rotate&&<TouchDrive inputs={touch.current}/>):
+   {mobile?(!rotate&&<TouchDrive key={drivingSteering.method} inputs={touch.current} method={drivingSteering.method} wheelSensitivity={drivingSteering.settings.wheel} analog={drivingSteering.analog}/>):
     <aside className="drive-help"><button aria-expanded={controls} onClick={()=>setControls(!controls)}>{controls?'Hide controls':'Controls'}</button>
       {controls&&<p>WASD or arrows to drive · Space handbrake · Drag to orbit · Scroll to zoom · R reset · Esc pause</p>}
     </aside>}
