@@ -214,17 +214,17 @@ function App(){
    {run.mode==='explorer'&&<p>{found.length} / {places.length} discoveries{found.length>0&&<> · {found.map(place=>place.name).join(', ')}</>}</p>}
    <dl className="run-breakdown">{Object.entries(scored.breakdown).filter(([label,value])=>label!=='Coins'&&value!==0).map(([label,value])=><React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
    <nav><button onClick={startRun}>Play again</button><button onClick={()=>setMenu('setup')}>Journey setup</button><button onClick={()=>setMenu('home')}>Main menu</button></nav>
-  </section>:menu?<section className="panel run-panel">
+  </section>:menu?<section className={menu==='pause'?'panel run-panel':'panel run-panel settings-panel'}>
    <small>{activeRoute?activeRoute.from+' → '+activeRoute.to:'THAR DESERT / UMERKOT TO SAEEDAU'}</small><h1>{menu==='pause'?'Journey paused':menu==='controls'?'Controls':menu==='audio'?'Audio settings':'Settings'}</h1>
    {(menu==='settings'||menu==='controls')&&<fieldset className="steering-settings"><legend>Controls</legend>
-    <label>Steering method <select value={drivingSteering.settings.method} onChange={event=>{
+    <label className="settings-select">Steering method <select value={drivingSteering.settings.method} onChange={event=>{
      const method=event.target.value as typeof drivingSteering.settings.method;
      drivingSteering.setSettings({...drivingSteering.settings,method});
      if(method==='tilt'&&drivingSteering.sensor!=='active')void drivingSteering.enableTilt();
     }}><option value="buttons">Left / right buttons</option><option value="wheel">Virtual steering wheel</option><option value="tilt">Tilt steering</option></select></label>
-    {(['tilt','deadZone','wheel'] as const).map((key,index)=><label key={key}>{['Tilt sensitivity','Steering dead zone','Wheel sensitivity'][index]}
+    {(['tilt','deadZone','wheel'] as const).map((key,index)=><label className="settings-slider" key={key}>{['Tilt sensitivity','Steering dead zone','Wheel sensitivity'][index]}
      <input type="range" min={key==='deadZone'?0:.4} max={key==='deadZone'?18:2.5} step={key==='deadZone'?1:.1}
-      value={drivingSteering.settings[key]} onChange={event=>drivingSteering.setSettings({...drivingSteering.settings,[key]:Number(event.target.value)})}/></label>)}
+      value={drivingSteering.settings[key]} onChange={event=>drivingSteering.setSettings({...drivingSteering.settings,[key]:Number(event.target.value)})}/><span className="settings-value" aria-hidden="true">{key==='deadZone'?`${drivingSteering.settings[key]}°`:`${drivingSteering.settings[key].toFixed(1)}×`}</span></label>)}
     {drivingSteering.settings.method==='tilt'&&<>
      <button onClick={drivingSteering.calibrate} disabled={drivingSteering.sensor!=='active'}>Calibrate</button>
      {drivingSteering.sensor!=='active'&&<button onClick={()=>void drivingSteering.enableTilt()}>Enable tilt</button>}
@@ -232,15 +232,15 @@ function App(){
     </>}
     {!mobile&&<small>WASD or arrow keys to drive · Space to brake · Drag to orbit · Scroll to zoom</small>}
    </fieldset>}
-   {menu==='settings'&&<label>Graphics quality <select value={graphics} onChange={event=>{
+   {menu==='settings'&&<label className="settings-select">Graphics quality <select value={graphics} onChange={event=>{
      const quality=event.target.value as typeof graphics;setGraphics(quality);savePreference('graphics',quality);
    }}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>}
-   {menu==='settings'&&<p><label><input type="checkbox" checked={recenter} onChange={event=>{setRecenter(event.target.checked);savePreference('camera.recenter',event.target.checked);}}/> Recenter chase camera after orbiting</label></p>}
+   {menu==='settings'&&<p><label className="settings-check"><input type="checkbox" checked={recenter} onChange={event=>{setRecenter(event.target.checked);savePreference('camera.recenter',event.target.checked);}}/> Recenter chase camera after orbiting</label></p>}
    {(menu==='settings'||menu==='audio')&&<fieldset className="audio-settings"><legend>Audio</legend>
-    {(['master','music','engine','effects','environment'] as const).map(key=><label key={key}>{key[0].toUpperCase()+key.slice(1)} volume
-     <input type="range" min="0" max="1" step=".01" value={settings[key]} onChange={event=>adjust(key,Number(event.target.value))}/>
+    {(['master','music','engine','effects','environment'] as const).map(key=><label className="settings-slider" key={key}>{key[0].toUpperCase()+key.slice(1)} volume
+     <input type="range" min="0" max="1" step=".01" value={settings[key]} onChange={event=>adjust(key,Number(event.target.value))}/><span className="settings-value" aria-hidden="true">{Math.round(settings[key]*100)}%</span>
     </label>)}
-    <label><input type="checkbox" checked={settings.mute} onChange={event=>adjust('mute',event.target.checked)}/> Mute all audio</label>
+    <label className="settings-check" ><input type="checkbox" checked={settings.mute} onChange={event=>adjust('mute',event.target.checked)}/> Mute all audio</label>
     <details><summary>Radio shortcuts</summary>
      {(Object.keys(shortcuts) as (keyof Shortcuts)[]).map(key=><label key={key}>{key}
       <input aria-label={'Shortcut '+key} maxLength={1} value={bindings[key]} onFocus={event=>event.target.select()} onChange={event=>{

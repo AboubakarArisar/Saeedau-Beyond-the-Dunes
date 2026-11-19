@@ -57,7 +57,7 @@ const icons:Record<DriveAction,string>={
   left:'m15 5-7 7 7 7',right:'m9 5 7 7-7 7',
   throttle:'M9 3h6l2 17H7L9 3Zm1.5 5h3m-3.5 4h4m-4.5 4h5',
   reverse:'M5 7h14l1 10H4L5 7Zm3 4h8m-8 3h8',
-  brake:'M6 4h7a2 2 0 0 1 0 4H9v8h10v4H5V8a4 4 0 0 1 1-4Z',
+  brake:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM10 16V8h3a2.25 2.25 0 0 1 0 4.5h-3',
 };
 export function TouchDrive({inputs,method,wheelSensitivity,analog}:{inputs:Map<number,DriveAction>;method:string;wheelSensitivity:number;analog:RefObject<number>}){
   const wheel=useRef<{id:number;angle:number;rotation:number}|null>(null);

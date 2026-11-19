@@ -35,8 +35,14 @@
 }
 .touch-steering button {width:clamp(54px, 16dvh, 68px); aspect-ratio:1; border-radius:50%}
 .touch-steering span {display:none}
-.touch-pedals button {width:clamp(54px, 12vw, 77px); height:var(--pedal-height)}
-.touch-pedals .touch-brake {height:46px; width:58px}
+.touch-drive .touch-pedals {gap:6px}
+.touch-pedals button {
+ box-sizing:border-box; width:clamp(68px,10vw,82px); height:var(--pedal-height);
+ grid-template-columns:minmax(0,1fr); gap:4px; border-radius:12px;
+ padding:5px; font-size:.6875rem; font-weight:700; line-height:1.15; text-align:center;
+}
+.touch-pedals button span {max-width:100%;overflow-wrap:anywhere}
+.touch-pedals button svg {width:20px;height:20px}
 .touch-pedals .touch-reverse {background:#56322dd9; border-color:#dba999a0}
 .touch-pedals .touch-throttle {background:#6a4c27d9; border-color:#ffd292}
 .touch-drive button[data-held=true] {background:#ffe0a6; color:#241b16; border-color:#fff2ce}
