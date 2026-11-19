@@ -45,8 +45,9 @@ function VehicleSelector({vehicle,change}:{vehicle:Vehicle;change:(amount:number
   </div>;
 }
 
-type PreviewProps={frame:RefObject<HTMLDivElement|null>;orbit:(delta:number)=>void;zoom:(delta:number)=>void};
-function Showroom({frame,orbit,zoom}:PreviewProps){
+type PreviewProps={frame:RefObject<HTMLDivElement|null>;orbit:(delta:number)=>void;zoom:(delta:number)=>void;assetStatus:'ready'|'loading'|'error'};
+const assetMessage={ready:'',loading:'Loading vehicle…',error:'Vehicle unavailable. Choose another vehicle or reload.'};
+function Showroom({frame,orbit,zoom,assetStatus}:PreviewProps){
   const pointers=useRef(new Map<number, {x:number;y:number}>());
   const pinchDistance=()=>{
     const [a,b]=pointers.current.values();
@@ -74,7 +75,7 @@ function Showroom({frame,orbit,zoom}:PreviewProps){
       else if(event.key==='-')zoom(-.14);
       else return;
       event.preventDefault();event.stopPropagation();
-    }}/>
+    }}>{assetStatus!=='ready'&&<p role="status">{assetMessage[assetStatus]}</p>}</div>
 }
 
 type MenuProps=PreviewProps&{vehicle:Vehicle;selectVehicle:(vehicle:Vehicle)=>void;back:()=>void};
@@ -82,7 +83,7 @@ function cycle(vehicle:Vehicle,delta:number){
   return fleet[(fleet.indexOf(vehicle)+delta+fleet.length)%fleet.length];
 }
 
-export function JourneySetup({vehicle,selectVehicle,back,frame,mode,selectMode,season,selectSeason,garage,start}:MenuProps&{
+export function JourneySetup({vehicle,selectVehicle,back,frame,assetStatus,mode,selectMode,season,selectSeason,garage,start}:MenuProps&{
   mode:Mode;selectMode:(mode:Mode)=>void;season:Season;selectSeason:(season:Season)=>void;garage:()=>void;start:()=>void;
 }){
   return <section className="journey-menu journey-setup" aria-labelledby="journey-heading">
@@ -96,7 +97,7 @@ export function JourneySetup({vehicle,selectVehicle,back,frame,mode,selectMode,s
         <p>{modeCopy[mode].tagline}</p><span>{modes[mode].objective}</span>
       </div>
     </div>
-    <div className="showroom setup-showroom" ref={frame} aria-hidden="true"/>
+    <div className="showroom setup-showroom" ref={frame}>{assetStatus!=='ready'&&<p role="status">{assetMessage[assetStatus]}</p>}</div>
     <div className="mode-track" role="group" aria-label="Game mode">
       {modeOrder.map((key,index)=><button key={key} aria-pressed={mode===key} onClick={()=>selectMode(key)}>
         <span className="mode-symbol" aria-hidden="true"><span>{String(index+1).padStart(2,'0')}</span>
@@ -111,12 +112,12 @@ export function JourneySetup({vehicle,selectVehicle,back,frame,mode,selectMode,s
         <div>{seasonChoices.map(([key,name])=><button key={key} aria-pressed={season===key} onClick={()=>selectSeason(key)}>{name}</button>)}</div>
       </div>
       <VehicleSelector vehicle={vehicle} change={delta=>selectVehicle(cycle(vehicle,delta))}/>
-      <button className="journey-start" onClick={start}>Start {modes[mode].name}<Arrow/></button>
+      <button className="journey-start" disabled={assetStatus!=='ready'} onClick={start}>Start {modes[mode].name}<Arrow/></button>
     </footer>
   </section>;
 }
 
-export function Garage({vehicle,selectVehicle,back,frame,orbit,zoom}:MenuProps){
+export function Garage({vehicle,selectVehicle,back,frame,orbit,zoom,assetStatus}:MenuProps){
   const profile=vehicles[vehicle],copy=vehicleCopy[vehicle];
   const change=(delta:number)=>selectVehicle(cycle(vehicle,delta));
   return <section className="journey-menu garage-showroom" aria-label="Garage" onKeyDown={event=>{
@@ -136,7 +137,7 @@ export function Garage({vehicle,selectVehicle,back,frame,orbit,zoom}:MenuProps){
         <div><dt>Handling</dt><dd>{copy.handling}</dd></div>
       </dl>
     </div>
-    <Showroom frame={frame} orbit={orbit} zoom={zoom}/>
+    <Showroom frame={frame} orbit={orbit} zoom={zoom} assetStatus={assetStatus}/>
     <footer className="garage-footer">
       <VehicleSelector vehicle={vehicle} change={change}/>
       <p id="showroom-hint"><span>Drag to rotate · Scroll to zoom</span><span>Drag to rotate · Pinch to zoom</span>

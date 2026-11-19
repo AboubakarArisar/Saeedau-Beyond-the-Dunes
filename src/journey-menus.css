@@ -78,6 +78,7 @@
 .journey-objective>span {color:var(--muted);font-size:clamp(.79rem,1.2vw,1rem);line-height:1.45}
 .showroom {grid-area:stage;min-width:0;min-height:0;cursor:grab;touch-action:none}
 .showroom:active {cursor:grabbing}
+.showroom>p {display:grid;place-items:center;height:100%;margin:0;padding:12px;text-align:center;text-shadow:0 1px 5px #000}
 .setup-showroom {pointer-events:none}
 .mode-track {
   grid-area:modes;
@@ -154,6 +155,7 @@
   text-align:left;
 }
 .journey-menu .journey-start:hover {background:#ffdbab;color:#171613}
+.journey-menu .journey-start:disabled {opacity:.55;cursor:default}
 .journey-start svg {flex:none}
 .garage-showroom {
   grid-template:"top top" auto "info stage" minmax(0,1fr) ". footer" auto / minmax(0,34fr) minmax(0,66fr);

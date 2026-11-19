@@ -14,15 +14,15 @@ export function visit(last:number,position:number,lateral:number,restricted=fals
 export const development=(distance:number)=>Math.max(0,Math.min(1,(3000-distance)/2100));
 export const junction=checkpoints[2];
 export const vehicles = {
-  jeep: {name:'Long Chassis jeep', acceleration:5.1, top:35, sand:15, turn:1, braking:9, radius:.39,width:.96,length:1.99},
-  kekro: {name:'Kekro', acceleration:3.7, top:30, sand:13, turn:.81, braking:7, radius:.5,width:1.16,length:2.28},
-  unique: {name:'Unique 70 motorcycle', acceleration:4.7, top:25, sand:11, turn:1.22, braking:8, radius:.33,width:.29,length:1.07},
+  jeep: {name:'Long Chassis jeep', acceleration:5.1, top:35, sand:15, turn:1, braking:9, radius:.39,width:.96,length:1.99,center:0},
+  kekro: {name:'Kekro', acceleration:3.7, top:30, sand:13, turn:.81, braking:7, radius:.51,width:1.24,length:2.80,center:-.25},
+  unique: {name:'Unique 70 motorcycle', acceleration:4.7, top:25, sand:11, turn:1.22, braking:8, radius:.304,width:.35,length:.985,center:.025},
 };
 export type Vehicle = keyof typeof vehicles;
 export const chaseProfiles={
   jeep:{distance:6.9,height:3.35,target:1.22,min:4.8},
-  kekro:{distance:8.4,height:4.05,target:1.52,min:5.7},
-  unique:{distance:5.8,height:2.75,target:.94,min:3.7},
+  kekro:{distance:9.6,height:4.85,target:1.89,min:6.75},
+  unique:{distance:5.4,height:2.65,target:.82,min:3.5},
 };
 export function dampHeading(current:number,target:number,dt:number){
   const difference=target-current;

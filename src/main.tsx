@@ -25,6 +25,7 @@ function App(){
  const [menu,setMenu]=useState('home');
  const [stats,setStats]=useState([0,0]);
  const [failed,setFailed]=useState(false);
+ const [vehicleAssets,setVehicleAssets]=useState<Partial<Record<Vehicle,'ready'|'error'>>>({});
  const [vehicle,setVehicle]=useState<Vehicle>(()=>{
   const saved=preference<Vehicle>('vehicle','jeep');
   return Object.hasOwn(vehicles,saved)?saved:'jeep';
@@ -55,7 +56,9 @@ function App(){
  const [keyError,setKeyError]=useState('');
  const sound=useRef<ReturnType<typeof createGameAudio>|null>(null);
  const motion=useRef<Motion>({speed:0,sand:false,throttle:false});
- const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,recenter,season,mode,preview:false,garage:false,finish:false,previewFrame,previewAngle:0,previewZoom:0});
+ const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,recenter,season,mode,preview:false,garage:false,finish:false,previewFrame,previewAngle:0,previewZoom:0,
+  vehicleLoad:(key:Vehicle,status:'ready'|'error')=>setVehicleAssets(previous=>({...previous,[key]:status})),
+ });
  options.current.paused=menu!==''||rotate;
  options.current.shadows=shadows;
  options.current.vehicle=vehicle;
@@ -141,6 +144,7 @@ function App(){
   setMenu('');
  }
  function startRun(){
+  if(vehicle!=='jeep'&&vehicleAssets[vehicle]!=='ready')return;
   savedRun.current=false;
   announcedOrigin.current=false;
   previousLeg.current=0;
@@ -162,6 +166,7 @@ function App(){
  const nextDiscovery=places.find(place=>!found.includes(place));
  const preview={
   frame:previewFrame,vehicle,selectVehicle:setVehicle,
+  assetStatus:vehicle==='jeep'?'ready' as const:vehicleAssets[vehicle]??'loading' as const,
   orbit:(delta:number)=>{
    const angle=options.current.previewAngle+delta;
    options.current.previewAngle=Math.atan2(Math.sin(angle),Math.cos(angle));

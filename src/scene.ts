@@ -13,6 +13,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   paused:boolean;shadows:boolean;vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
   touch:Map<number,DriveAction>;reset:number;recenter:boolean;season:Season;mode:Mode;preview:boolean;finish:boolean;
   garage:boolean;previewFrame:{current:HTMLDivElement|null};previewAngle:number;previewZoom:number;
+  vehicleLoad:(vehicle:Vehicle,status:'ready'|'error')=>void;
 }) {
   const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
@@ -24,9 +25,9 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   const previewCar={position:previewDistance,lateral:road(previewDistance),
     heading:Math.atan2(road(previewDistance+1)-road(previewDistance-1),2)};
   const previewProfiles={
-    kekro:{radius:2.54,target:1.13,angle:2.35},
+    kekro:{radius:3.36,target:1.56,angle:2.35},
     jeep:{radius:2.27,target:1.02,angle:2.22},
-    unique:{radius:1.23,target:.65,angle:2.08},
+    unique:{radius:1.24,target:.59,angle:2.08},
   };
   const previewAngles={journey:2.17,race:2.48,challenge:1.94,explorer:1.66};
   const contact=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShaderMaterial({
@@ -271,77 +272,40 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   box(1.35,.07,.08,'#222526',0,1.86,-.43);box(1.35,.07,.08,'#222526',0,1.81,.44);const glass=box(1.27,.49,.04,'#8dabb2',0,1.57,-.43);(glass.material as T.MeshStandardMaterial).transparent=true;(glass.material as T.MeshStandardMaterial).opacity=.48;glass.castShadow=false;
   const wheels:T.Mesh[]=[]; for(const x of [-.85,.85])for(const z of [-1.13,1.12]) {const tire=mesh(new T.CylinderGeometry(.39,.39,.24,20),'#242323',jeep);tire.geometry.rotateZ(Math.PI/2);tire.position.set(x,.41,z);tire.castShadow=true;wheels.push(tire);const hub=mesh(new T.CylinderGeometry(.19,.19,.252,12),'#9f9b8e',tire);hub.rotation.z=Math.PI/2;}
   const spare=mesh(new T.CylinderGeometry(.33,.33,.19,20),'#282727',jeep);spare.rotation.x=Math.PI/2;spare.position.set(.35,1.02,1.86);
-  function alternate(vehicle:'kekro'|'unique'){
-    const model=new T.Group();scene.add(model);
-    const part=(size:[number,number,number],position:[number,number,number],color:string)=>{
-      const object=mesh(new T.BoxGeometry(...size),color,model);object.position.set(...position);object.castShadow=true;return object;
-    };
-    const tires:T.Mesh[]=[],radius=vehicles[vehicle].radius;
-    const truck=vehicle==='kekro';
-    for(const lateral of truck?[-1,1]:[0])for(const depth of truck?[-1.45,1.38]:[-.73,.67]){
-      const tire=mesh(new T.CylinderGeometry(radius,radius,truck?.32:.09,24),'#242322',model);tire.geometry.rotateZ(Math.PI/2);tire.position.set(lateral,radius,depth);tire.castShadow=true;tires.push(tire);
-      const rim=mesh(new T.CylinderGeometry(radius*.64,radius*.64,truck?.33:.095,16),'#b4aaa0',tire);rim.rotation.z=Math.PI/2;
-    }
-    if(truck){
-      part([2,.37,4.5],[0,.78,0],'#656457');
-      part([1.92,1.15,1.43],[0,1.53,-1.32],'#2e746b');
-      part([1.72,.43,.04],[0,1.73,-2.05],'#86a9aa');
-      part([1.99,.12,1.56],[0,2.12,-1.32],'#d2ba76');
-      part([1.95,.16,2.55],[0,1,.82],'#a27a4e');
-      for(const side of [-1,1]){
-        part([.1,.57,2.55],[side*.93,1.28,.82],'#42736b');
-        part([.22,.13,.06],[side*.69,.85,2.26],'#a02f25');
-        part([.23,.2,.06],[side*.73,1.17,-2.06],'#fff2ca');
-      }
-      part([1.94,.47,.12],[0,1.29,2.1],'#3c6a61');
-      for(const side of [-1,1]){
-        part([.035,.14,2.46],[side*.99,1.4,.82],'#dcb652');
-        part([.036,.075,2.48],[side*.99,1.23,.82],'#9e3828');
-        part([.035,.1,1.26],[side*.97,1.29,-1.32],'#e3ae52');
-        part([.04,.52,.72],[side*.97,1.79,-1.42],'#87aca8');
-        for(let panel=0;panel<6;panel++){
-          const ornament=part([.04,.13,.13],[side*.994,1.32,-.12+panel*.38],panel%2?'#f1d18c':'#992e25');
-          ornament.rotation.x=Math.PI/4;
-        }
-      }
-      for(let column=-4;column<=4;column++){
-        part([.14,.12,.045],[column*.19,1.3,2.183],column%2?'#cf9d4c':'#d9e2ad');
-        part([.14,.09,.045],[column*.19,1.1,-2.07],column%2?'#cf9d4c':'#d9e2ad');
-      }
-      part([1.37,.19,.09],[0,.91,-2.13],'#383735');
-    }else{
-      part([.18,.25,1.05],[0,.55,0],'#3b3b38');
-      part([.3,.24,.51],[0,.83,-.27],'#a52b25');
-      part([.27,.1,.52],[0,.85,.26],'#292829');
-      for(const side of [-1,1]){
-        part([.055,.67,.055],[side*.075,.61,-.65],'#bdb6a9').rotation.x=.23;
-        part([.045,.43,.045],[side*.09,.49,.45],'#a4a097').rotation.x=1;
-      }
-      part([.57,.045,.055],[0,1.07,-.53],'#55524b');
-      part([.17,.14,.11],[0,.94,-.65],'#fff3d1');
-      part([.14,.07,.055],[0,.78,.56],'#bb2f25');
-      part([.07,.09,.69],[.14,.42,.29],'#b5aaa0');
-    }
-    return {model,tires};
-  }
-  const fleet:Record<Vehicle,{model:T.Group;tires:T.Object3D[]}>={
-    jeep:{model:jeep,tires:wheels},kekro:alternate('kekro'),unique:alternate('unique'),
+  type VehicleModel={model:T.Group;tires:T.Object3D[];steerAxles:T.Object3D[]};
+  const fleet:Record<Vehicle,VehicleModel>={
+    jeep:{model:jeep,tires:wheels,steerAxles:[]},
+    kekro:{model:new T.Group(),tires:[],steerAxles:[]},
+    unique:{model:new T.Group(),tires:[],steerAxles:[]},
   };
   let disposed=false;
-  new GLTFLoader().load(import.meta.env.BASE_URL+'vehicles/long-chassis.glb',({scene:model})=>{
-    if(disposed){dispose(model);return;}
-    const tires:T.Object3D[]=[];
-    model.traverse(item=>{
-      if(item.name.startsWith('Wheel_'))tires.push(item);
-      if(item instanceof T.Mesh){
-        item.castShadow=!item.material.transparent;
-        item.receiveShadow=false;
-      }
+  const loader=new GLTFLoader();
+  const files={jeep:'long-chassis',kekro:'kekro',unique:'unique70'} as const;
+  for(const vehicle of Object.keys(files) as Vehicle[]){
+    loader.load(import.meta.env.BASE_URL+'vehicles/'+files[vehicle]+'.glb',({scene:model})=>{
+      if(disposed){dispose(model);return;}
+      const tires:T.Object3D[]=[],steerAxles:T.Object3D[]=[];
+      model.traverse(item=>{
+        if(item.name.startsWith('Wheel_'))tires.push(item);
+        if(item.name.startsWith('Steer_'))steerAxles.push(item);
+        if(item instanceof T.Mesh){
+          const materials=Array.isArray(item.material)?item.material:[item.material];
+          item.castShadow=materials.every(material=>!material.transparent);
+          item.receiveShadow=false;
+        }
+      });
+      if(vehicle==='jeep'){scene.remove(jeep);dispose(jeep);}
+      model.visible=false;
+      scene.add(model);
+      fleet[vehicle]={model,tires,steerAxles};
+      options.vehicleLoad(vehicle,'ready');
+      renderer.shadowMap.needsUpdate=true;
+    },undefined,error=>{
+      if(disposed)return;
+      options.vehicleLoad(vehicle,'error');
+      console.error('Could not load the '+vehicles[vehicle].name+' model',error);
     });
-    scene.remove(jeep);dispose(jeep);scene.add(model);
-    fleet.jeep={model,tires};
-    renderer.shadowMap.needsUpdate=true;
-  },undefined,error=>{console.error('Could not load the Long Chassis model',error);});
+  }
   const dust=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:'#dab584',size:.28,transparent:true,opacity:.35,depthWrite:false}));const particles=new Float32Array(90);dust.geometry.setAttribute('position',new T.BufferAttribute(particles,3));scene.add(dust);
   const keys=new Set<string>();
   let car=start(),orbit=0,zoom=0,last=performance.now(),lastReport=0,handle=0;
@@ -448,6 +412,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     const throttle=keys.has('KeyW')||keys.has('ArrowUp')||touch.includes('throttle');
     const reverse=keys.has('KeyS')||keys.has('ArrowDown')||touch.includes('reverse');
     const parked=options.title;
+    let travelled=0;
     if(options.finish&&run.mode==='explorer')run.outcome='finished';
     if(!options.paused&&!document.hidden&&!run.outcome){
       stream(car.position);
@@ -462,11 +427,12 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         steering=T.MathUtils.damp(steering,steer,12,stepTime);
         const {position,lateral}=car;
         advance(car,stepTime,{...input,steer:steering},activeVehicle,season.grip);
-        const angle=-car.heading;
-        const movement=moveThrough({x:lateral,z:-position,width:profile.width,length:profile.length,
-          sin:Math.sin(angle),cos:Math.cos(angle)},car.lateral-lateral,position-car.position,collisionChunks.values());
+        const sin=Math.sin(car.heading),cos=Math.cos(car.heading);
+        const movement=moveThrough({x:lateral+sin*profile.center,z:-position-cos*profile.center,
+          width:profile.width,length:profile.length,sin:-sin,cos},car.lateral-lateral,position-car.position,collisionChunks.values());
         car.lateral=T.MathUtils.clamp(lateral+movement.dx,-110,110);
         car.position=T.MathUtils.clamp(position-movement.dz,0,LENGTH);
+        travelled+=(car.lateral-lateral)*sin+(car.position-position)*cos;
         if(movement.impact>.0001){
           const impactSpeed=movement.impact/stepTime;
           if(impactSpeed>2&&now-lastImpact>950){
@@ -484,10 +450,18 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     }
     const shown=parked?displayCar:options.preview?previewCar:car;
     stream(shown.position);
-    const {model,tires}=fleet[parked?'jeep':activeVehicle];
+    const visibleVehicle=parked?'jeep':activeVehicle;
+    const {model,tires,steerAxles}=fleet[visibleVehicle];
     for(const entry of Object.values(fleet))entry.model.visible=entry.model===model;
-    const y=ground(shown.lateral,shown.position);model.position.set(shown.lateral,y,-shown.position);model.rotation.set(0,-shown.heading,activeVehicle==='unique'&&!options.paused?-steer*Math.min(.35,Math.abs(car.speed)*.025):0,'YXZ');
-    if(!options.paused)for(const tire of tires)tire.rotation.x-=car.speed*dt/vehicles[activeVehicle].radius;
+    const y=ground(shown.lateral,shown.position);
+    const detailed=visibleVehicle!=='jeep';
+    const xSlope=Math.sin(shown.heading),zSlope=Math.cos(shown.heading);
+    const pitch=detailed?Math.atan2(ground(shown.lateral+xSlope,shown.position+zSlope)-
+      ground(shown.lateral-xSlope,shown.position-zSlope),2):0;
+    model.position.set(shown.lateral,y+(detailed&&paved(shown.lateral,shown.position)?.075:0),-shown.position);
+    model.rotation.set(pitch,-shown.heading,visibleVehicle==='unique'&&!options.paused?-steering*Math.min(.31,Math.abs(car.speed)*.023):0,'YXZ');
+    for(const axle of steerAxles)axle.rotation.y=options.preview?0:-steering*(visibleVehicle==='unique'?.45:.36);
+    for(const tire of tires)tire.rotation.x=(tire.rotation.x-travelled/vehicles[visibleVehicle].radius)%(2*Math.PI);
     if(parked){
       const drift=options.reducedMotion||options.mobile?0:Math.sin(now*.00025)*.14;
       const angle=shown.heading+.8+drift*.23;
@@ -509,7 +483,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       const viewSlope=2*Math.tan(T.MathUtils.degToRad(previewCamera.fov/2))*visibleRadius/height;
       const fit=profile.radius*Math.hypot(1,1/viewSlope);
       const angle=shown.heading+(options.garage?profile.angle+options.previewAngle:previewAngles[options.mode]);
-      const distance=fit*(options.garage?1.16-options.previewZoom*.29:1.06);
+      const distance=fit*(options.garage?(detailed?1.09:1.16)-options.previewZoom*.29:1.06);
       showroomAngle=first||options.reducedMotion?angle:dampHeading(showroomAngle,angle,dt*2);
       showroomDistance=first||options.reducedMotion?distance:T.MathUtils.damp(showroomDistance,distance,12,dt);
       const framed=Math.max(fit,showroomDistance);
@@ -542,18 +516,21 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       camera.lookAt(target);first=false;
     }
     const view=parked?titleCamera:options.preview?previewCamera:camera;
-    contact.visible=showroomFill.visible=options.preview;
-    if(options.preview){
-      const profile=vehicles[activeVehicle];
-      contact.position.set(shown.lateral,y+.09,-shown.position);
-      contact.rotation.y=-shown.heading;
+    showroomFill.visible=options.preview;
+    contact.visible=options.preview||detailed;
+    if(contact.visible){
+      const profile=vehicles[visibleVehicle];
+      contact.position.set(shown.lateral+xSlope*profile.center,y+(paved(shown.lateral,shown.position)?.087:.012),
+        -shown.position-zSlope*profile.center);
+      contact.rotation.set(-Math.PI/2+pitch,-shown.heading,0);
       contact.scale.set(profile.width*3.2,profile.length*2.7,1);
+    }
+    if(options.preview){
       showroomFill.position.set(shown.lateral-3,y+4.4,-shown.position-3.3);
     }
     sky.position.copy(view.position);
     sun.position.set(shown.lateral-(parked?37:27),y+(parked?26:34),-shown.position-19);
     sun.color.set(season.sun);
-    const visibleVehicle=parked?'jeep':activeVehicle;
     if(options.shadows&&(!sun.castShadow||shadowParked!==parked||shadowVehicle!==visibleVehicle||
       Math.hypot(shown.lateral-shadowX,shown.position-shadowZ)>.22||Math.abs(shown.heading-shadowHeading)>.025)){
       renderer.shadowMap.needsUpdate=true;
