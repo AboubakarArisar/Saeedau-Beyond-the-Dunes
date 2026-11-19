@@ -1,3 +1,4 @@
+import {followJourney,type JourneyRoute} from './customJourney';
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import type {Motion} from './gameAudio';
@@ -17,7 +18,7 @@ import {createCoinField} from './coinField';
 
 export function mount(host: HTMLElement, report: (speed:number, position:number, progress:number, motion:Motion, run:Run) => void, options: {
   paused:boolean;shadows:boolean;vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
-  touch:Map<number,DriveAction>;reset:number;recenter:boolean;season:Season;mode:Mode;preview:boolean;finish:boolean;
+  touch:Map<number,DriveAction>;reset:number;customRoute?:JourneyRoute;recenter:boolean;season:Season;mode:Mode;preview:boolean;finish:boolean;
   garage:boolean;previewFrame:{current:HTMLDivElement|null};previewAngle:number;previewZoom:number;
   vehicleLoad:(vehicle:Vehicle,status:'ready'|'error')=>void;
   coinPickup:(count:number)=>void;
@@ -36,7 +37,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     jeep:{radius:2.27,target:1.02,angle:2.22},
     unique:{radius:1.37,target:.78,angle:2.08},
   };
-  const previewAngles={journey:2.17,race:2.48,challenge:1.94,explorer:1.66};
+  const previewAngles={journey:2.17,race:2.48,challenge:1.94,explorer:1.66,custom:2.17};
   const contact=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShaderMaterial({
     transparent:true,depthWrite:false,
     vertexShader:'varying vec2 tex; void main(){tex=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
@@ -345,6 +346,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   }
   const dust=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:'#dab584',size:.28,transparent:true,opacity:.35,depthWrite:false}));const particles=new Float32Array(90);dust.geometry.setAttribute('position',new T.BufferAttribute(particles,3));scene.add(dust);
   const keys=new Set<string>();
+  let customRoute:JourneyRoute|undefined;
   let car=start(),orbit=0,zoom=0,last=performance.now(),lastReport=0,handle=0;
   let drag:number|undefined,returnAfter=0,followHeading=car.heading,followHeight=0;
   const down=(event:KeyboardEvent)=>{
@@ -373,6 +375,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   };
   const listeners=new AbortController(),signal=listeners.signal;
   window.addEventListener('keydown',down,{signal});window.addEventListener('keyup',up,{signal});window.addEventListener('blur',blur,{signal});
+  document.addEventListener('visibilitychange',()=>{last=performance.now();blur();},{signal});
   renderer.domElement.addEventListener('pointerdown',pointer,{signal});
   renderer.domElement.addEventListener('pointerup',release,{signal});
   renderer.domElement.addEventListener('pointercancel',release,{signal});
@@ -434,7 +437,9 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     }
     if(previousTitle!==options.title){previousTitle=options.title;first=true;}
     if(reset!==options.reset){
-      reset=options.reset;car=start();run=newRun(options.mode);
+      reset=options.reset;customRoute=options.customRoute;
+      car=customRoute?{...customRoute.spawn}:start();
+      run=newRun(options.mode,customRoute);
       collectedCoins.clear();coinField.reset();
       options.coinPickup(0);
       steering=0;lastImpact=-Infinity;first=true;orbit=zoom=0;release();
@@ -463,7 +468,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       const input={throttle,reverse,steer,brake:keys.has('Space')||touch.includes('brake')};
       const onPickup=(coin:Coin)=>coinField.pickup(coin,now/1000);
       const beforeCoins=run.coins;
-      const limit=run.leg===7&&(run.mode==='journey'||run.mode==='explorer')?villageLimit:LENGTH;
+      const limit=customRoute||run.leg===7&&(run.mode==='journey'||run.mode==='explorer')?villageLimit:LENGTH;
       for(let step=0;step<steps;step++){
         const clock=resumed?stepTime:elapsed/1000/steps;
         if(!tick(run,run.countdown>0?stepTime:clock)){
@@ -491,9 +496,14 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         collectCoins(collectedCoins,blockedCoins,{lateral,position},car,activeVehicle,onPickup);
         run.coins=collectedCoins.size;
         if(!paved(car.lateral,car.position)&&Math.abs(car.speed)>.5)run.offRoad+=clock;
-        checkpoint(run,visit(run.leg,car.position,car.lateral,run.mode==='race'||run.mode==='challenge'));
-        run.progress=Math.max(run.progress,Math.min(checkpoints[run.leg+1]??LENGTH,car.position));
-        discover(run,car);
+        if(customRoute&&run.custom){
+          if(followJourney(customRoute,run.custom,{position,lateral},car))run.outcome='finished';
+          run.progress=run.custom.metres;
+        }else{
+          checkpoint(run,visit(run.leg,car.position,car.lateral,run.mode==='race'||run.mode==='challenge'));
+          run.progress=Math.max(run.progress,Math.min(checkpoints[run.leg+1]??LENGTH,car.position));
+          discover(run,car);
+        }
         if(run.outcome)break;
       }
       if(run.coins>beforeCoins)options.coinPickup(run.coins);
@@ -609,9 +619,9 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     }
     renderer.render(scene,view);
     if(now-lastReport>100){
-      const speed=Math.abs(car.speed)*3.6,progress=run.leg===stops.length-1?1:Math.min(.999,run.progress/LENGTH);
+      const speed=Math.abs(car.speed)*3.6,progress=customRoute?run.progress/customRoute.length:run.leg===stops.length-1?1:Math.min(.999,run.progress/LENGTH);
       report(speed,car.position,progress,{speed,throttle:throttle||reverse,sand:!paved(car.lateral,car.position),
-        season:options.season,rain:rain.visible}, {...run});
+        season:options.season,rain:rain.visible}, {...run,custom:run.custom?{...run.custom}:undefined});
       lastReport=now;
     }
     handle=requestAnimationFrame(frame);

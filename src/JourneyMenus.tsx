@@ -1,17 +1,19 @@
 import {useRef,type PointerEvent,type RefObject} from 'react';
 import {vehicles,type Vehicle} from './driving';
 import {modes,type Mode} from './run';
+import {journeyLocations,type JourneySelection} from './customJourney';
 import type {Season} from './seasons';
 import './journey-menus.css';
 
 const fleet=['kekro','jeep','unique'] as const;
-const modeOrder=['journey','race','challenge','explorer'] as const;
+const modeOrder=['journey','race','challenge','explorer','custom'] as const;
 const vehicleCopy={
   kekro:{name:'Kekro',description:'Local transport / Tharparkar',handling:'Steady'},
   jeep:{name:'Long Chassis',description:'The classic desert ride',handling:'Balanced'},
   unique:{name:'Unique 70',description:'The everyday explorer',handling:'Agile'},
 };
 const modeCopy={
+  custom:{tagline:'Your start. Your destination.',icon:'M8 5H6a3 3 0 0 0 0 6h11a3 3 0 0 1 0 6h-5m0 0 3-3m-3 3 3 3M8 2l3 3-3 3'},
   journey:{tagline:'The road is yours.',icon:'M6 20 10 4m8 16L14 4m-2 5v3m0 3v3'},
   race:{tagline:'Race against time.',icon:'M4 21V4m0 1c4-4 8 4 15 0v10c-7 4-11-4-15 0m7-11v10m4-9v10M4 10c4-4 8 4 15 0'},
   challenge:{tagline:'Every second counts.',icon:'M9 2h6m-3 10 3-3m3-5 2 2m0 7a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z'},
@@ -83,10 +85,11 @@ function cycle(vehicle:Vehicle,delta:number){
   return fleet[(fleet.indexOf(vehicle)+delta+fleet.length)%fleet.length];
 }
 
-export function JourneySetup({vehicle,selectVehicle,back,frame,assetStatus,mode,selectMode,season,selectSeason,garage,start}:MenuProps&{
+export function JourneySetup({vehicle,selectVehicle,back,frame,assetStatus,mode,selectMode,season,selectSeason,garage,start,selection,selectJourney,validJourney}:MenuProps&{
+  selection:JourneySelection;selectJourney:(selection:JourneySelection)=>void;validJourney:boolean;
   mode:Mode;selectMode:(mode:Mode)=>void;season:Season;selectSeason:(season:Season)=>void;garage:()=>void;start:()=>void;
 }){
-  return <section className="journey-menu journey-setup" aria-labelledby="journey-heading">
+  return <section className={'journey-menu journey-setup'+(mode==='custom'?' custom-setup':'')} aria-labelledby="journey-heading">
     <header className="journey-top">
       <button className="journey-link" onClick={back}><Arrow left/> Back</button>
       <button className="journey-link" onClick={garage}>Garage <Arrow/></button>
@@ -96,6 +99,16 @@ export function JourneySetup({vehicle,selectVehicle,back,frame,assetStatus,mode,
       <div className="journey-objective" key={mode} aria-live="polite">
         <p>{modeCopy[mode].tagline}</p><span>{modes[mode].objective}</span>
       </div>
+      {mode==='custom'&&<div className="journey-destinations">
+        {(['from','to'] as const).map(field=><div className={'journey-location journey-'+field} key={field}>
+          <label className="journey-label" htmlFor={'custom-'+field}>{field==='from'?'From':'To'}</label>
+          <select id={'custom-'+field} value={selection[field]} onChange={event=>selectJourney({...selection,[field]:event.target.value})}>
+            {journeyLocations.map(location=><option key={location}>{location}</option>)}
+          </select>
+        </div>)}
+        <button type="button" aria-label="Swap destinations" title="Swap destinations" onClick={()=>selectJourney({from:selection.to,to:selection.from})}>⇄</button>
+        {!validJourney&&<p role="status">{selection.from===selection.to?'Choose two different locations.':'No drivable route connects these locations.'}</p>}
+      </div>}
     </div>
     <div className="showroom setup-showroom" ref={frame}>{assetStatus!=='ready'&&<p role="status">{assetMessage[assetStatus]}</p>}</div>
     <div className="mode-track" role="group" aria-label="Game mode">
@@ -112,7 +125,7 @@ export function JourneySetup({vehicle,selectVehicle,back,frame,assetStatus,mode,
         <div>{seasonChoices.map(([key,name])=><button key={key} aria-pressed={season===key} onClick={()=>selectSeason(key)}>{name}</button>)}</div>
       </div>
       <VehicleSelector vehicle={vehicle} change={delta=>selectVehicle(cycle(vehicle,delta))}/>
-      <button className="journey-start" disabled={assetStatus!=='ready'} onClick={start}>Start {modes[mode].name}<Arrow/></button>
+      <button className="journey-start" disabled={assetStatus!=='ready'||(mode==='custom'&&!validJourney)} onClick={start}>Start {modes[mode].name}<Arrow/></button>
     </footer>
   </section>;
 }

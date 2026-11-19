@@ -12,9 +12,11 @@ export const shortcuts={panel:'m',play:'p',next:'n',previous:'b'};
 export type Shortcuts=typeof shortcuts;
 export const isControl=(target:EventTarget|null)=>target instanceof Element&&!!target.closest('button,input,select,textarea,a,[contenteditable]:not([contenteditable="false"]),[data-radio]');
 
-export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;volume:number;music:number;setMusic:(value:number)=>void;bindings:Shortcuts}){
+export function Radio({mobile,visible,volume,music,setMusic,bindings}:{mobile:boolean;visible:boolean;volume:number;music:number;setMusic:(value:number)=>void;bindings:Shortcuts}){
   const [source,setSource]=useState<Source>(()=>preference<string>('radio.source','builtin')==='local'?'local':'builtin');
-  const [expanded,setExpanded]=useState(()=>preference('radio.expanded',false));
+  const [desktopExpanded,setDesktopExpanded]=useState(()=>preference('radio.expanded',false));
+  const [mobileExpanded,setMobileExpanded]=useState(false);
+  const expanded=mobile?mobileExpanded:desktopExpanded;
   const [shuffle,setShuffle]=useState(()=>preference('radio.shuffle',false));
   const [repeat,setRepeat]=useState<Repeat>(()=>preference('radio.repeat','off'));
   const [personalTracks,setPersonalTracks]=useState<Track[]>([]);
@@ -35,7 +37,7 @@ export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;
   const selected=selection[source];
   const current=tracks.find(track=>track.id===selected);
 
-  useEffect(()=>{savePreference('radio.source',source);savePreference('radio.expanded',expanded);savePreference('radio.shuffle',shuffle);savePreference('radio.repeat',repeat);},[source,expanded,shuffle,repeat]);
+  useEffect(()=>{savePreference('radio.source',source);savePreference('radio.expanded',desktopExpanded);savePreference('radio.shuffle',shuffle);savePreference('radio.repeat',repeat);},[source,desktopExpanded,shuffle,repeat]);
   useEffect(()=>{savePreference('radio.muted',muted);},[muted]);
   useEffect(()=>{
     const request=new AbortController();
@@ -64,7 +66,7 @@ export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;
     if(value===source)return;
     clearAudio();setSource(value);
   }
-  function togglePanel(){setExpanded(!expanded);}
+  function togglePanel(){(mobile?setMobileExpanded:setDesktopExpanded)(!expanded);}
   function play(track:Track){
     const element=audio.current;
     if(!element)return;
@@ -142,7 +144,11 @@ export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;
       onError={()=>{if(loaded.current!==undefined){setLocalPlaying(false);setLocalError(source==='builtin'?
         'This soundtrack track could not be loaded. Try Next or select another track.':
         'This file cannot be decoded by your browser.');}}}/>
-    {visible&&<aside data-radio className={'radio'+(expanded?' radio-expanded':'')} aria-label="Thar Radio">
+    {visible&&(mobile&&!expanded?<button className="radio radio-mini" aria-label="Expand" title="Thar Radio" aria-expanded={false} onClick={togglePanel}>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M9 18V5l11-2v13M9 9l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/>
+      </svg>
+    </button>:<aside data-radio className={'radio'+(expanded?' radio-expanded':'')} aria-label="Thar Radio">
       <header><span>THAR RADIO <small>{{local:'MY MUSIC',builtin:'SOUNDTRACK'}[source]}</small></span>
         <button aria-expanded={expanded} onClick={togglePanel}>{expanded?'Collapse':'Expand'}</button></header>
       <div className="radio-title" title={title}>{title}</div>
@@ -189,6 +195,6 @@ export function Radio({visible,volume,music,setMusic,bindings}:{visible:boolean;
         {source==='local'&&<small>Files stay on this device. Select them again after reloading.</small>}
       </>}
       {localError&&<p role="status">{localError}</p>}
-    </aside>}
+    </aside>)}
   </>;
 }

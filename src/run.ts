@@ -3,12 +3,14 @@ import {villageJunction,villagePlaces} from './village';
 import type {Season} from './seasons';
 import type {Vehicle} from './driving';
 import {coinValue} from './coins';
+import {journeyProgress,type JourneyRoute} from './customJourney';
 
 export const modes={
   journey:{name:'Free Journey',objective:'Follow the route from Umerkot to Saeedau at your own pace.'},
   race:{name:'Speed Racing',objective:'Reach Saeedau through all seven checkpoints. Impacts and shortcuts add time.'},
   challenge:{name:'Checkpoint Challenge',objective:'Beat the clock. Each checkpoint adds time for the next leg.'},
   explorer:{name:'Desert Explorer',objective:'Visit roadside places and village compounds. Finish whenever you like.'},
+  custom:{name:'Custom Journey',objective:'Choose your starting point and destination, then drive the route.'},
 } as const;
 export type Mode=keyof typeof modes;
 export const roadsidePlaces=[
@@ -28,9 +30,9 @@ export const places=[...roadsidePlaces.map(place=>({...place,radius:7})),...vill
 const homecomingStops=[villageDiscoveries[0],villageDiscoveries[4],villageDiscoveries[5]];
 export const stageTime=(leg:number)=>[76,69,72,74,70,73,67][leg]??0;
 export type Run=ReturnType<typeof newRun>;
-export function newRun(mode:Mode){
+export function newRun(mode:Mode,route?:JourneyRoute){
   return {mode,seconds:0,countdown:mode==='race'?3:0,remaining:stageTime(0),offRoad:0,impacts:0,crashes:0,
-    progress:0,leg:0,discoveries:0,coins:0,villageStage:0,outcome:null as 'finished'|'timeout'|null};
+    progress:0,leg:0,discoveries:0,coins:0,villageStage:0,custom:route?journeyProgress(route):undefined,outcome:null as 'finished'|'timeout'|null};
 }
 function distanceTo(car:Pick<Drive,'position'|'lateral'>,place:typeof places[number]){
   return Math.hypot(car.position-place.distance,car.lateral-road(place.distance)-place.offset);
@@ -72,9 +74,9 @@ export function score(run:Run){
   const found=discoveries(run.discoveries).length;
   const completed=run.outcome==='finished';
   const breakdown={
-    'Route distance':Math.floor(Math.min(LENGTH,run.progress)/25),
+    'Route distance':Math.floor((run.custom?run.progress:Math.min(LENGTH,run.progress))/25),
     Checkpoints:run.leg*100,
-    Completion:completed&&run.leg===7?400:0,
+    Completion:completed&&(run.leg===7||run.mode==='custom')?400:0,
     'Clean driving':run.impacts===0?run.leg*35:0,
     Discoveries:found*150,
     Coins:run.coins*coinValue,

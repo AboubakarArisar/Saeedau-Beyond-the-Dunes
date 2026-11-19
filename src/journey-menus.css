@@ -83,7 +83,7 @@
 .mode-track {
   grid-area:modes;
   display:grid;
-  grid-template-columns:repeat(4,minmax(0,1fr));
+  grid-template-columns:repeat(5,minmax(0,1fr));
   gap:clamp(8px,1.5vw,24px);
 }
 .mode-track button {
@@ -243,4 +243,43 @@
 }
 @media (prefers-reduced-motion:reduce) {
   .journey-menu * {animation:none;transition:none}
+}
+
+.journey-destinations {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr);
+  gap:6px;
+  align-items:end;
+  margin-top:clamp(4px, 2vh, 18px);
+}
+.journey-location {display:grid; gap:3px; min-width:0}
+.journey-from {grid-column:1; grid-row:1}
+.journey-to {grid-column:3; grid-row:1}
+.journey-location select,.journey-menu .journey-destinations button {
+  width:100%;
+  min-height:44px;
+  color:#fff1d5;
+  background:#251e18;
+  border:1px solid #ce9d6f;
+  border-radius:5px;
+  color-scheme:dark;
+}
+.journey-location select {padding:4px 7px; font-size:clamp(.72rem,1.1vw,.95rem); font-weight:750}
+.journey-destinations button {grid-column:2;grid-row:1;padding:0;font-size:1.3rem}
+.journey-destinations p {grid-column:1/-1;margin:0;color:#ffbd9a;font-size:.78rem}
+.custom-navigation {
+  width:max-content; max-width:175px; display:grid; margin-top:4px; padding:5px 8px;
+  border-radius:8px; background:#171716ed; color:#ffd2a0; font-size:.75rem;
+}
+.hud .custom-navigation strong {font-size:.94rem;color:#fff5df}
+@media(max-height:420px) and (orientation:landscape) {
+  .custom-setup {
+    grid-template-columns:minmax(0,55fr) minmax(0,45fr);
+    grid-template-rows:auto minmax(128px,1fr) auto auto;
+    overflow-y:auto;
+  }
+  .custom-setup h1 {font-size:clamp(1.5rem,3.6vw,2rem);line-height:1}
+  .custom-setup .journey-intro {padding-block:4px}
+  .custom-setup .journey-objective>span {display:none}
+  .custom-setup .journey-location select {font-size:.72rem;padding-inline:4px}
 }

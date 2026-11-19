@@ -6,7 +6,7 @@ const server=await createServer({
   server:{host:'127.0.0.1',port:5173,strictPort:true},
   plugins:[{name:'roadside-verification',enforce:'pre',transform(code,id){
     if(!id.replaceAll('\\','/').endsWith('/src/scene.ts'))return;
-    return code.replace('car=start();run=newRun(options.mode);',`car=start();run=newRun(options.mode);
+    return code.replace('run=newRun(options.mode,customRoute);',`run=newRun(options.mode,customRoute);
       const sample=new URLSearchParams(location.search);
       if(sample.has('distance')){
         car.position=Number(sample.get('distance'));

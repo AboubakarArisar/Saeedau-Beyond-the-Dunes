@@ -1,0 +1,68 @@
+.touch-layout {
+ --hud-top:max(8px, env(safe-area-inset-top));
+ --hud-left:max(10px, env(safe-area-inset-left));
+ --hud-right:max(10px, env(safe-area-inset-right));
+ --touch-bottom:max(8px, env(safe-area-inset-bottom));
+ --pedal-height:clamp(56px, 18dvh, 74px);
+ height:100dvh;
+ overflow:hidden;
+}
+.rotate-screen {
+ position:absolute; z-index:10; inset:0; display:flex; flex-direction:column;
+ align-items:center; justify-content:center; gap:14px; overflow:auto; text-align:center;
+ padding:max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+         max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+ background:radial-gradient(ellipse at 50% 55%, #372719, #171410 75%); color:#fff5df;
+}
+.rotate-screen svg {color:#f1b17b; flex:none}
+.rotate-screen h1 {margin:0; font-size:clamp(1.7rem, 7vw, 3rem); line-height:1; text-transform:uppercase}
+.rotate-screen p {margin:0 0 8px; max-width:28ch}
+.rotate-phone {transform-origin:center; transform-box:fill-box; animation:turn-phone 2.8s ease-in-out infinite}
+@keyframes turn-phone {0%, 15% {transform:rotate(0)} 50%, 82% {transform:rotate(90deg)}}
+@media(prefers-reduced-motion:reduce) {.rotate-phone {animation:none; transform:rotate(90deg)}}
+
+.touch-drive {
+ position:absolute; z-index:3; inset:0; pointer-events:none; display:flex;
+ align-items:end; justify-content:space-between;
+ padding:0 var(--hud-right) var(--touch-bottom) var(--hud-left);
+}
+.touch-drive>div {display:flex; align-items:end; gap:8px}
+.touch-drive button {
+ pointer-events:auto; touch-action:none; user-select:none; -webkit-touch-callout:none;
+ display:grid; place-content:center; justify-items:center; gap:2px;
+ padding:4px; color:#fff5df; background:#201915ba; border:1px solid #ffdfba69;
+ border-radius:16px; font-size:.65rem; line-height:1;
+}
+.touch-steering button {width:clamp(54px, 16dvh, 68px); aspect-ratio:1; border-radius:50%}
+.touch-steering span {display:none}
+.touch-pedals button {width:clamp(54px, 12vw, 77px); height:var(--pedal-height)}
+.touch-pedals .touch-brake {height:46px; width:58px}
+.touch-pedals .touch-reverse {background:#56322dd9; border-color:#dba999a0}
+.touch-pedals .touch-throttle {background:#6a4c27d9; border-color:#ffd292}
+.touch-drive button[data-held=true] {background:#ffe0a6; color:#241b16; border-color:#fff2ce}
+
+.touch-layout .hud {top:var(--hud-top); left:var(--hud-left); gap:3px; font-size:.72rem}
+.touch-layout .hud-speed {padding:4px 9px}
+.touch-layout .hud-speed strong {font-size:1.65rem}
+.touch-layout .hud-vehicle {padding:2px 7px}
+.touch-layout .hud-route {max-width:175px; padding:7px 9px; font-size:.72rem}
+.hud-route[hidden] {display:none}
+.mobile-route-toggle {
+ width:max-content; max-width:160px; display:grid; text-align:left; gap:2px;
+ padding:5px 8px; border-radius:8px; background:#171513df;
+}
+.mobile-route-toggle span {overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mobile-route-toggle small {background:none; padding:0; color:#ffd2a1}
+.touch-layout .hud-coins {top:var(--hud-top); padding:4px 8px; font-size:1rem}
+.touch-layout .hud-coins svg {width:19px; height:19px}
+.touch-layout .pause {top:var(--hud-top); right:var(--hud-right); z-index:4; display:grid; place-items:center; width:42px; height:42px; padding:0}
+.touch-layout .radio {
+ right:var(--hud-right); top:calc(var(--hud-top) + 49px);
+ bottom:auto; width:min(275px, 44vw);
+ max-height:calc(100dvh - var(--hud-top) - 58px - var(--touch-bottom) - var(--pedal-height));
+ overflow:auto; overscroll-behavior:contain; z-index:4; padding:8px;
+}
+.touch-layout .radio-mini {
+ width:42px; height:42px; display:grid; place-items:center;
+ color:#ffe0af; border-radius:12px;
+}
