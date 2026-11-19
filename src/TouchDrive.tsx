@@ -108,6 +108,10 @@ export function TouchDrive({inputs,method,wheelSensitivity,analog}:{inputs:Map<n
     <span>{caption}</span>
   </button>;
   return <div className="touch-drive" aria-label="Touch driving controls">
+    {method==='tilt'?<>
+      <div className="touch-pedals">{pad('brake','Handbrake','Handbrake')}{pad('reverse','Brake or reverse','Brake')}</div>
+      <div className="touch-pedals">{pad('throttle','Accelerate','Drive')}</div>
+    </>:<>
     <div className="touch-steering">{method==='wheel'?<button type="button" className="touch-wheel" aria-label="Steering wheel"
       data-held={rotation!==0} onPointerDown={event=>{
         if(wheel.current||event.button!==0)return;
@@ -127,7 +131,8 @@ export function TouchDrive({inputs,method,wheelSensitivity,analog}:{inputs:Map<n
         <path d="M8 27l24 7 24-7M32 34v23" stroke="currentColor" strokeWidth="7" fill="none"/>
         <circle cx="32" cy="33" r="7" fill="#dfb06c"/>
       </svg>
-    </button>:method==='buttons'?<>{pad('left','Steer left','Left')}{pad('right','Steer right','Right')}</>:<small className="tilt-indicator">Tilt steering</small>}</div>
+    </button>:<>{pad('left','Steer left','Left')}{pad('right','Steer right','Right')}</>}</div>
     <div className="touch-pedals">{pad('brake','Handbrake','Handbrake')}{pad('reverse','Brake or reverse','Brake')}{pad('throttle','Accelerate','Drive')}</div>
+    </>}
   </div>;
 }

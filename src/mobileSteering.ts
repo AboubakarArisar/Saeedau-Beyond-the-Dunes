@@ -25,33 +25,43 @@ export function useSteering(active:boolean){
     if(settings.method!=='tilt'||!canListen)return;
     const listeners=new AbortController(),signal=listeners.signal;
     let timeout:number|undefined;
+    let lastSampleTime:number|undefined;
     function arm(){
       clearTimeout(timeout);
       timeout=window.setTimeout(()=>{
         analog.current=0;sample.current=undefined;setSensor('unavailable');
       },2500);
     }
-    function reset(){analog.current=0;sample.current=undefined;if(!document.hidden)arm();}
+    function reset(){
+      analog.current=0;sample.current=undefined;lastSampleTime=undefined;
+      clearTimeout(timeout);
+      if(!document.hidden)arm();
+    }
     function read(event:DeviceOrientationEvent){
       if(document.hidden||event.beta===null||event.gamma===null||
         !Number.isFinite(event.beta)||!Number.isFinite(event.gamma))return;
       const angle=screen.orientation?.angle??window.orientation??0;
       const value=tiltAngle(event.beta,event.gamma,angle);
       const current=sample.current;
-      if(!current||current.angle!==angle)sample.current={angle,value,neutral:value};
+      if(!current||current.angle!==angle){
+        sample.current={angle,value,neutral:value};
+        analog.current=0;
+      }
       else current.value=value;
       const {neutral}=sample.current!;
       const delta=((value-neutral+540)%360)-180;
       const target=active?tiltInput(delta,settings.deadZone,settings.tilt):0;
-      analog.current+=.22*(target-analog.current);
+      const now=performance.now();
+      const elapsed=lastSampleTime===undefined?16:now-lastSampleTime;
+      lastSampleTime=now;
+      // Keep the response consistent across different sensor update rates.
+      analog.current+=(1-Math.exp(-elapsed/45))*(target-analog.current);
       setSensor('active');
       arm();
     }
     window.addEventListener('deviceorientation',read,{signal});
     window.addEventListener('blur',reset,{signal});
-    document.addEventListener('visibilitychange',()=>{
-      clearTimeout(timeout);reset();
-    },{signal});
+    document.addEventListener('visibilitychange',reset,{signal});
     arm();
     return ()=>{listeners.abort();clearTimeout(timeout);analog.current=0;};
   },[settings.method,settings.deadZone,settings.tilt,canListen,active]);
