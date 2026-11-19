@@ -25,6 +25,18 @@ export class Colliders {
       }
     }
   }
+
+  obstructs(x:number,z:number,radius:number){
+    const nearby=new Set<Footprint>();
+    this.query(x,z,0,0,radius,nearby);
+    for(const box of nearby){
+      const dx=x-box.x,dz=z-box.z;
+      const across=Math.max(0,Math.abs(dx*box.cos-dz*box.sin)-box.width);
+      const along=Math.max(0,Math.abs(dx*box.sin+dz*box.cos)-box.length);
+      if(across*across+along*along<=radius*radius)return true;
+    }
+    return false;
+  }
 }
 
 export function sweep(vehicle:Footprint,dx:number,dz:number,solids:Iterable<Footprint>){

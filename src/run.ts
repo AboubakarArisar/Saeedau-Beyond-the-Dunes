@@ -1,6 +1,7 @@
 import {checkpoints, LENGTH, road, type Drive} from './driving';
 import type {Season} from './seasons';
 import type {Vehicle} from './driving';
+import {coinValue} from './coins';
 
 export const modes={
   journey:{name:'Free Journey',objective:'Follow the route from Umerkot to Saeedau at your own pace.'},
@@ -22,7 +23,7 @@ export const stageTime=(leg:number)=>[76,69,72,74,70,73,67][leg]??0;
 export type Run=ReturnType<typeof newRun>;
 export function newRun(mode:Mode){
   return {mode,seconds:0,countdown:mode==='race'?3:0,remaining:stageTime(0),offRoad:0,impacts:0,crashes:0,
-    progress:0,leg:0,discoveries:0,outcome:null as 'finished'|'timeout'|null};
+    progress:0,leg:0,discoveries:0,coins:0,outcome:null as 'finished'|'timeout'|null};
 }
 export function discover(run:Run,car:Drive){
   if(run.mode!=='explorer')return;
@@ -63,6 +64,7 @@ export function score(run:Run){
     Completion:completed&&run.leg===7?400:0,
     'Clean driving':run.impacts===0?run.leg*35:0,
     Discoveries:found*150,
+    Coins:run.coins*coinValue,
     'Explorer objective':found>=5?300:0,
     'Time bonus':completed&&run.mode==='race'?Math.max(0,Math.floor((490-raceTime(run))*2)):
       completed&&run.mode==='challenge'?Math.floor(run.remaining*5):0,
@@ -70,10 +72,11 @@ export function score(run:Run){
   };
   return {breakdown,total:Math.max(0,Object.values(breakdown).reduce((sum,value)=>sum+value,0))};
 }
-export type Records=Record<string,{score:number;time?:number}>;
+export type Records=Record<string,{score:number;time?:number;coins?:number}>;
 export const recordKey=(mode:Mode,vehicle:Vehicle,season:Season)=>[mode,vehicle,season].join('.');
 export function record(records:Records,key:string,run:Run):Records{
   const previous=records[key],time=run.mode==='race'&&run.outcome==='finished'?raceTime(run):previous?.time;
   return {...records,[key]:{score:Math.max(previous?.score??0,score(run).total),
+    coins:Math.max(previous?.coins??0,run.coins),
     time:time===undefined?undefined:Math.min(previous?.time??Infinity,time)}};
 }

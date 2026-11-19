@@ -8,12 +8,16 @@ import { LENGTH, ROAD_WIDTH, checkpoints, junction, stops, ground, road, paved, 
 import {Colliders,moveThrough} from './collision';
 import {seasons,type Season} from './seasons';
 import {checkpoint,discover,newRun,places,tick,type Mode,type Run} from './run';
+import {createGuardrails} from './guardrails';
+import {collectCoins,coinsBetween,type Coin} from './coins';
+import {createCoinField} from './coinField';
 
 export function mount(host: HTMLElement, report: (speed:number, position:number, progress:number, motion:Motion, run:Run) => void, options: {
   paused:boolean;shadows:boolean;vehicle:Vehicle;title:boolean;mobile:boolean;reducedMotion:boolean;
   touch:Map<number,DriveAction>;reset:number;recenter:boolean;season:Season;mode:Mode;preview:boolean;finish:boolean;
   garage:boolean;previewFrame:{current:HTMLDivElement|null};previewAngle:number;previewZoom:number;
   vehicleLoad:(vehicle:Vehicle,status:'ready'|'error')=>void;
+  coinPickup:()=>void;
 }) {
   const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
@@ -64,6 +68,18 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   function mesh(geometry:T.BufferGeometry,color:string,parent:T.Object3D=scene) {const item=new T.Mesh(geometry,new T.MeshStandardMaterial({color,roughness:.91})); item.receiveShadow=true; parent.add(item); return item;}
   const span=320, chunks=new Map<number,T.Group>();
   const collisionChunks=new Map<number,Colliders>();
+  const guardrails=createGuardrails(),coinField=createCoinField();
+  const collectedCoins=new Set<number>(),blockedCoins=new Set<number>();
+  scene.add(coinField.mesh);
+  let clearancePosition=displayCar.position;
+  function refreshCoinClearance(distance:number){
+    clearancePosition=distance;
+    blockedCoins.clear();
+    const grids=[...collisionChunks.values()];
+    for(const coin of coinsBetween(distance-span*2,distance+span*2)){
+      if(grids.some(grid=>grid.obstructs(coin.lateral,-coin.distance,1.35)))blockedCoins.add(coin.id);
+    }
+  }
   let currentSeason:Season|undefined;
   const rainPoints=new Float32Array(180*6);
   const rainGeometry=new T.BufferGeometry();
@@ -81,6 +97,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     environment=assets;
     tuneVegetation(options.season);
     for(const [key,group] of chunks)decorate(group,assets,key*span,(key+1)*span,collisionChunks.get(key)!);
+    refreshCoinClearance(clearancePosition);
     renderer.shadowMap.needsUpdate=true;
   }).catch(error=>console.error('Could not initialize Thar scenery',error));
   function surface(kind:'sand'|'asphalt'){
@@ -108,7 +125,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     item.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
     (item.material as T.MeshStandardMaterial).map=texture;
   }
-  const dispose=(root:T.Object3D)=>root.traverse(item=>{if(item instanceof T.InstancedMesh){item.dispose();if(item.userData.sharedEnvironment)return;}if(item instanceof T.Mesh||item instanceof T.Points||item instanceof T.LineSegments){item.geometry.dispose();for(const material of Array.isArray(item.material)?item.material:[item.material]){if(material.map&&material.map!==sand&&material.map!==asphalt)material.map.dispose();material.dispose();}}});
+  const dispose=(root:T.Object3D)=>root.traverse(item=>{if(item instanceof T.InstancedMesh){item.dispose();if(item.userData.sharedEnvironment)return;}if(item instanceof T.Mesh||item instanceof T.Points||item instanceof T.LineSegments){item.geometry.dispose();if(item.userData.sharedMaterial)return;for(const material of Array.isArray(item.material)?item.material:[item.material]){if(material.map&&material.map!==sand&&material.map!==asphalt)material.map.dispose();material.dispose();}}});
   function chunk(segment:number){
     const group=new T.Group(),from=segment*span,to=from+span;
     const colliders=new Colliders();
@@ -188,17 +205,8 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       strip(0,.13,'#eadbb5',Array.from({length:Math.max(0,Math.floor((Math.min(end,LENGTH+24)-from)/16))},(_,index)=>[from+index*16+4,from+index*16+10]));
     }
     if(environment)decorate(group,environment,from,to,colliders);
+    guardrails.add(group,from,to,colliders);
     for(let d=Math.max(0,Math.ceil(from/12)*12);d<Math.min(to,LENGTH);d+=12){
-      if(d>=junction-38&&d<=junction-14){
-        const x=road(d)+7.4,y=ground(x,d);
-        const angle=-Math.atan2(road(d+1)-road(d-1),2);
-        const rail=mesh(new T.BoxGeometry(.21,.25,11.8),'#8b8981',group);
-        rail.position.set(x,y+.72,-d);rail.rotation.y=angle;
-        colliders.add({x,z:-d,width:.105,length:5.9,sin:Math.sin(angle),cos:Math.cos(angle)});
-        for(const offset of [-3.5,3.5]){
-          mesh(new T.BoxGeometry(.17,.85,.16),'#66655a',group).position.set(x+Math.sin(angle)*offset,y+.35,-d+Math.cos(angle)*offset);
-        }
-      }
       if(d>2800&&d%84===0){
         const x=road(d)+27*Math.sin(d);
         if(Math.abs(x-road(d))<10)continue;
@@ -264,6 +272,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     renderer.shadowMap.needsUpdate=true;
     for(const [key,group] of chunks)if(Math.abs(key-segment)>2){scene.remove(group);dispose(group);chunks.delete(key);collisionChunks.delete(key);}
     for(let key=segment-2;key<=segment+2;key++)if(!chunks.has(key))chunk(key);
+    refreshCoinClearance(distance);
   }
   const jeep=new T.Group(); scene.add(jeep);
   function box(width:number,height:number,depth:number,color:string,x:number,y:number,z:number){const item=mesh(new T.BoxGeometry(width,height,depth),color,jeep);item.position.set(x,y,z);item.castShadow=true;return item;}
@@ -396,7 +405,11 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       }
     }
     if(previousTitle!==options.title){previousTitle=options.title;first=true;}
-    if(reset!==options.reset){reset=options.reset;car=start();run=newRun(options.mode);steering=0;lastImpact=-Infinity;first=true;orbit=zoom=0;release();}
+    if(reset!==options.reset){
+      reset=options.reset;car=start();run=newRun(options.mode);
+      collectedCoins.clear();coinField.reset();
+      steering=0;lastImpact=-Infinity;first=true;orbit=zoom=0;release();
+    }
     if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;if(!options.preview)first=true;orbit=zoom=0;release();}
     if(previousPreview!==options.preview||previousGarage!==options.garage){
       previousPreview=options.preview;previousGarage=options.garage;first=true;orbit=zoom=0;release();
@@ -418,6 +431,8 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       stream(car.position);
       const steps=Math.max(1,Math.ceil(dt*75)),stepTime=dt/steps,profile=vehicles[activeVehicle];
       const input={throttle,reverse,steer,brake:keys.has('Space')||touch.includes('brake')};
+      const onPickup=(coin:Coin)=>coinField.pickup(coin,now/1000);
+      const beforeCoins=run.coins;
       for(let step=0;step<steps;step++){
         const clock=resumed?stepTime:elapsed/1000/steps;
         if(!tick(run,run.countdown>0?stepTime:clock)){
@@ -441,15 +456,19 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
           }
           car.speed=Math.sign(car.speed)*Math.max(0,Math.abs(car.speed)-impactSpeed*.95);
         }
+        collectCoins(collectedCoins,blockedCoins,{lateral,position},car,activeVehicle,onPickup);
+        run.coins=collectedCoins.size;
         if(!paved(car.lateral,car.position)&&Math.abs(car.speed)>.5)run.offRoad+=clock;
         checkpoint(run,visit(run.leg,car.position,car.lateral,run.mode==='race'||run.mode==='challenge'));
         run.progress=Math.max(run.progress,Math.min(checkpoints[run.leg+1]??LENGTH,car.position));
         discover(run,car);
         if(run.outcome)break;
       }
+      if(run.coins>beforeCoins)options.coinPickup();
     }
     const shown=parked?displayCar:options.preview?previewCar:car;
     stream(shown.position);
+    coinField.update(shown.position,now/1000,!parked&&!options.preview,options.reducedMotion,collectedCoins,blockedCoins);
     const visibleVehicle=parked?'jeep':activeVehicle;
     const {model,tires,steerAxles}=fleet[visibleVehicle];
     for(const entry of Object.values(fleet))entry.model.visible=entry.model===model;
@@ -560,5 +579,5 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     handle=requestAnimationFrame(frame);
   }
   handle=requestAnimationFrame(frame);
-  return ()=>{disposed=true;cancelAnimationFrame(handle);observer.disconnect();listeners.abort();dispose(scene);if(environment)disposeEnvironment(environment);sand.dispose();asphalt.dispose();sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
+  return ()=>{disposed=true;cancelAnimationFrame(handle);observer.disconnect();listeners.abort();dispose(scene);guardrails.dispose();if(environment)disposeEnvironment(environment);sand.dispose();asphalt.dispose();sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
 }

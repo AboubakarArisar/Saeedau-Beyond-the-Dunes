@@ -26,10 +26,31 @@ export function createGameAudio(){
   for(let index=0;index<samples.length;index++){previous=.89*previous+.11*(Math.random()*2-1);samples[index]=previous;}
   const roadFilter=context.createBiquadFilter(), windGain=context.createGain();
   wind.buffer=noise;wind.loop=true;windGain.gain.value=0;wind.connect(roadFilter).connect(windGain).connect(master);
+  const chime=context.createBuffer(1,Math.ceil(context.sampleRate*.18),context.sampleRate);
+  const note=chime.getChannelData(0);
+  for(let index=0;index<note.length;index++){
+    const time=index/context.sampleRate,second=Math.max(0,time-.038);
+    const attack=Math.min(1,time/.005),nextAttack=Math.min(1,second/.004);
+    note[index]=(.14*Math.sin(2*Math.PI*1175*time)*Math.exp(-29*time)*attack+
+      .15*Math.sin(2*Math.PI*1760*second)*Math.exp(-32*second)*nextAttack)*Math.min(1,(.18-time)/.018);
+  }
+  let pickup:AudioBufferSourceNode|undefined;
+  function clearPickup(){
+    if(!pickup)return;
+    pickup.onended=null;pickup.stop();pickup.disconnect();pickup=undefined;
+  }
   engine.start();pulse.start();wind.start();
   const set=(parameter:AudioParam,value:number)=>parameter.setTargetAtTime(value,context.currentTime,.12);
   return {
     resume:()=>context.resume(),
+    pickup(){
+      if(context.state!=='running')return;
+      clearPickup();
+      const source=context.createBufferSource();
+      pickup=source;source.buffer=chime;source.connect(master);
+      source.onended=()=>{source.disconnect();if(pickup===source)pickup=undefined;};
+      source.start();
+    },
     update(settings:AudioSettings,vehicle:Vehicle,motion:Motion,active:boolean){
       const idle={kekro:31,jeep:46,unique:74}[vehicle],speed=Math.min(1,motion.speed/100);
       const frequency=idle*(1+speed*1.65+(motion.throttle?.33:0));
@@ -41,6 +62,6 @@ export function createGameAudio(){
       const ambience=motion.rain?.21:motion.season==='dry'?.13:motion.season==='winter'?.06:.09;
       set(windGain.gain,settings.environment*(ambience+speed*(motion.sand?.43:.26)));
     },
-    dispose(){engine.stop();pulse.stop();wind.stop();void context.close().catch(error=>console.warn('Could not close game audio',error));},
+    dispose(){clearPickup();engine.stop();pulse.stop();wind.stop();void context.close().catch(error=>console.warn('Could not close game audio',error));},
   };
 }

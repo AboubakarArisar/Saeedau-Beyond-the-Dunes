@@ -58,6 +58,7 @@ function App(){
  const motion=useRef<Motion>({speed:0,sand:false,throttle:false});
  const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,recenter,season,mode,preview:false,garage:false,finish:false,previewFrame,previewAngle:0,previewZoom:0,
   vehicleLoad:(key:Vehicle,status:'ready'|'error')=>setVehicleAssets(previous=>({...previous,[key]:status})),
+  coinPickup:()=>sound.current?.pickup(),
  });
  options.current.paused=menu!==''||rotate;
  options.current.shadows=shadows;
@@ -192,10 +193,11 @@ function App(){
    <small>{modes[run.mode].name}</small>
    <h1>{run.outcome==='timeout'?'Time expired':run.leg===7?'Welcome to Saeedau':'Expedition complete'}</h1>
    <p><strong>{scored.total.toLocaleString()} points</strong>{best&&<> · Personal best {best.score.toLocaleString()}</>}</p>
+   <p>{run.coins} {run.coins===1?'coin':'coins'} · {scored.breakdown.Coins} coin points{best?.coins!==undefined&&<> · Best {best.coins}</>}</p>
    {run.mode==='race'&&<p>Adjusted time {time(raceTime(run))} · Driving time {time(run.seconds)}{best?.time!==undefined&&<> · Personal best {time(best.time)}</>}</p>}
    {run.mode==='challenge'&&<p>{run.leg} / 7 checkpoints · {time(run.remaining)} remaining</p>}
    {run.mode==='explorer'&&<p>{found.length} / {places.length} discoveries{found.length>0&&<> · {found.map(place=>place.name).join(', ')}</>}</p>}
-   <dl className="run-breakdown">{Object.entries(scored.breakdown).filter(([,value])=>value!==0).map(([label,value])=><React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
+   <dl className="run-breakdown">{Object.entries(scored.breakdown).filter(([label,value])=>label!=='Coins'&&value!==0).map(([label,value])=><React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
    <nav><button onClick={startRun}>Play again</button><button onClick={()=>setMenu('setup')}>Journey setup</button><button onClick={()=>setMenu('home')}>Main menu</button></nav>
   </section>:menu?<section className="panel run-panel">
    <small>THAR DESERT / UMERKOT TO SAEEDAU</small><h1>{menu==='pause'?'Journey paused':'Settings'}</h1>
@@ -229,6 +231,7 @@ function App(){
     <small className="hud-vehicle">{vehicles[vehicle].name}</small>
     <div className="hud-route">
      <span>{modes[run.mode].name} · {scored.total} pts</span>
+     <span className="hud-coins"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="#e9ad4c" stroke="#ffe498"/><path d="M5.7 12.1 8.4 8l2 1.9 1.7-2.9 2.3 5.1" fill="none" stroke="#704316" strokeLinecap="round" strokeLinejoin="round"/></svg>Coins {run.coins}</span>
      {run.mode==='race'&&<span className="hud-distance">{run.countdown>0?'Starting in '+Math.ceil(run.countdown):time(raceTime(run))}</span>}
      {run.mode==='challenge'&&<span className="hud-distance">{time(run.remaining)} remaining</span>}
      {run.mode==='explorer'?<>
