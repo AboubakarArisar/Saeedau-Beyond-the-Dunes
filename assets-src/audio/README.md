@@ -27,7 +27,7 @@ The [Jalal chandio fav songs playlist](https://www.youtube.com/playlist?list=PLH
 | 19 | [Mahbob Je Milan Khan ag Azraiel Cha Kando](https://www.youtube.com/watch?v=9hCgTcSOF9o) | Farooq Faqeer Shar | SINDHI SONG ETC |
 | 20 | [Tenu Wekh Sajjan Sikk Lahandi Nahi](https://www.youtube.com/watch?v=ojdikt3l3-c) | Jalal Chandio | Abdul Aziz Chachar |
 
-The release manifest is empty because no source file or license authorizing this distribution was verified for these versions.
+The release manifest includes the three MP3s supplied by the project owner, who confirmed permission to redistribute them. The clearance notes below apply to adding other recordings from the original playlist.
 
 - **TP Sindhi and Naz uploads.** Start with Thar Production or its published legal contact for the nine TP Sindhi uploads, and with Naz Production for the two Naz uploads. [TP Sindhi rights notice](https://www.youtube.com/watch?v=2ri7axNh36g) · [Naz Folk upload credits](https://www.youtube.com/watch?v=Wh9Ryb0TOLs)
 - **Topic releases.** “Chadi Tun Je Wendi” credits EMI Pakistan (℗ 1979). “Kadhey Nahen Na To” credits Pakistan Broadcasting Corporation (℗ 2026) and names The Orchard Enterprises as the distributor. These are leads for the exact masters. [EMI release](https://www.youtube.com/watch?v=JylWIbtDfxI) · [Pakistan Broadcasting Corporation release](https://www.youtube.com/watch?v=92pksMi4-aM)

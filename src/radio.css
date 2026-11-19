@@ -9,11 +9,12 @@
 .radio button{padding:4px 8px}
 .radio button:disabled{opacity:.48;cursor:default}
 .radio button[aria-pressed=true],.radio button[aria-current=true]{background:#e0ad78;color:#241913}
-.radio-sources,.radio-time,.radio-volume,.radio-file,.radio-embed{margin:9px 0}
-.radio-embed{width:100%;min-width:200px;height:max(200px,min(270px,48vw));background:#130f0c}
-.radio-embed iframe{display:block;border:0}
+.radio-sources,.radio-time,.radio-volume,.radio-file{margin:9px 0}
+.radio-sources{padding-block:7px;border-block:1px solid #fff5df25}
+.radio-sources button{background:transparent;border-color:transparent;border-bottom-color:#fff5df36}
+.radio-sources button[aria-pressed=true]{background:#e0ad7818;color:#ffd49b;border-bottom-color:#e0ad78}
 .radio-time{font-variant-numeric:tabular-nums}
-.radio-time input,.radio-time progress,.radio-volume input,.audio-settings label input[type=range]{flex:1;min-width:64px;accent-color:#edaf76}
+.radio-time input,.radio-volume input,.audio-settings label input[type=range]{flex:1;min-width:64px;accent-color:#edaf76}
 .radio-file{display:grid;gap:4px}.radio-file input{max-width:100%}
 .radio-queue{max-height:115px;overflow:auto;margin:5px 0;padding:0;list-style:none}
 .radio-queue li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px;margin:3px 0}

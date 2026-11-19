@@ -92,15 +92,51 @@ try {
   browser=await chromium.launch({channel:'msedge',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   const url='http://127.0.0.1:'+port;
   await checkSoundtrack(browser,url);
+  const bundled=await browser.newPage({viewport:{width:1120,height:720}});
+  await bundled.route('**/*',route=>route.request().url().startsWith(url+'/')?route.continue():route.abort());
+  const manifest=await (await bundled.request.get(url+'/audio/thar-radio/manifest.json')).json();
+  expect(manifest).toHaveLength(3);
+  const requested=[];
+  bundled.on('request',request=>{if(request.resourceType()==='media')requested.push(request.url());});
+  const bundledButton=name=>bundled.getByRole('button',{name,exact:true});
+  const bundledAudio=bundled.locator('audio');
+  const bundledState=()=>bundledAudio.evaluate(audio=>({file:decodeURIComponent(new URL(audio.src).pathname.split('/').at(-1)),
+    time:audio.currentTime,duration:audio.duration,paused:audio.paused}));
+  await bundled.goto(url);
+  await bundledButton('start journey').click();await bundledButton('Start Free Journey').click();await bundledButton('Expand').click();
+  await expect(bundled.locator('.radio-queue li')).toHaveCount(3);
+  await expect(bundledAudio).toHaveCount(1);
+  expect(requested).toEqual([]);
+  await bundledButton('Play music').click();
+  for(const [index,track] of manifest.entries()){
+    if(index)await bundledButton('Next').click();
+    await expect(bundled.locator('.radio-title')).toHaveText(track.title+' · '+track.artist);
+    await expect.poll(async()=>{
+      const state=await bundledState();
+      return state.file===track.file&&!state.paused&&state.duration>0?state.time:0;
+    }).toBeGreaterThan(.1);
+  }
+  await bundledButton('Previous').click();
+  await expect.poll(async()=>(await bundledState()).file).toBe(manifest[1].file);
+  const beforeMenus=(await bundledState()).time;
+  await bundledButton('Pause').click();
+  bundled.once('dialog',dialog=>dialog.accept());await bundledButton('Main menu').click();
+  await bundledButton('Garage').click();
+  await expect.poll(async()=>(await bundledState()).time).toBeGreaterThan(beforeMenus);
+  expect(await bundledState()).toMatchObject({file:manifest[1].file,paused:false});
+  await bundledButton('Back').click();await bundledButton('start journey').click();
+  await bundledButton('Start Free Journey').click();
+  await expect(bundledButton('Pause music')).toBeVisible();
+  expect(await bundledState()).toMatchObject({file:manifest[1].file,paused:false});
+  await bundled.close();
+  console.log('All three packaged MP3s play with external requests blocked and survive Garage and menu transitions.');
   const page=await browser.newPage({viewport:{width:1120,height:720}});
   const faults=[];page.on('pageerror',error=>faults.push(error.message));
-  page.on('requestfailed',request=>{if(request.url().includes('youtube'))console.log('YouTube request:',request.failure()?.errorText, new URL(request.url()).pathname);});
   const button=name=>page.getByRole('button',{name,exact:true});
   const shot=name=>page.screenshot({path:join(process.env.SAEEDAU_SCREENSHOTS??'artifacts',name)});
   const media=()=>page.locator('audio').evaluate(audio=>({paused:audio.paused,time:audio.currentTime,volume:audio.volume}));
   await page.goto(url);
   await button('start journey').click();await button('Start Free Journey').click();await button('Expand').click();
-  await expect(page.locator('.radio-title')).toHaveText('No tracks are included yet.');
   await button('My Music').click();
   const input=page.locator('input[type=file]');
   await input.setInputFiles([{name:'Dune-one.wav',mimeType:'audio/wav',buffer:wave(220)},{name:'Dune-two.wav',mimeType:'audio/wav',buffer:wave(330)}]);
@@ -118,25 +154,10 @@ try {
   await expect.poll(async()=>(await media()).time).toBeLessThan(2);
   await page.getByRole('slider',{name:'Music volume'}).fill('0.4');
   await expect.poll(async()=>(await media()).volume).toBeCloseTo(.3);
-  await button('YouTube Radio').click();
+  await button('Thar Soundtrack').click();
   await expect.poll(async()=>(await media()).paused).toBe(true);
-  await expect(page.getByRole('link',{name:'Open on YouTube'})).toHaveAttribute('href',/PLijildE23Nm50i6eauzKr1v0CpUTNmh06/);
-  try {
-    const frame=page.locator('.radio-embed iframe');
-    await frame.waitFor({timeout:14000});
-    console.log('YouTube iframe: '+await frame.getAttribute('src'));
-    await button('Play music').click({timeout:14000});
-    await expect(button('Pause music')).toBeVisible({timeout:10000});
-    console.log('Live YouTube playback reached playing state.');
-  } catch(error){
-    console.log('Live YouTube playback unverified: '+(await page.locator('.radio [role=status]').allTextContents()).join(' ')+' '+error.message.split('\n')[0]);
-  }
-  await button('Collapse').click();await expect(page.locator('.radio-embed iframe')).toHaveCount(0);
-  await button('Expand').click();
-  await expect(page.locator('.radio-embed iframe')).toHaveCount(1,{timeout:14000});
-  await shot('fix-radio-expanded.png');
+  await shot('thar-radio-expanded.png');
   await button('My Music').click();
-  await expect(page.locator('.radio-embed iframe')).toHaveCount(0);
   await expect(button('Dune-two')).toHaveAttribute('aria-current','true');
   await button('Play music').click();
   await button('Pause').click();

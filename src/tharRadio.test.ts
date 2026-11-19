@@ -7,6 +7,7 @@ describe('built-in soundtrack manifest',()=>{
   it('accepts the empty release and trims display metadata',()=>{
     expect(readSoundtrack([])).toEqual([]);
     expect(readSoundtrack([track])).toEqual([{title:'First song',artist:'First artist',file:'first.mp3'}]);
+    expect(readSoundtrack([{...track,file:'First song - Artist.mp3'}])[0].file).toBe('First song - Artist.mp3');
   });
   it('rejects downloads outside the soundtrack directory and duplicate files',()=>{
     for(const file of ['https://example.com/song.mp3','../song.mp3','nested/song.mp3','song.mp3?remote=yes','song.mp4']){

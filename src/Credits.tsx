@@ -23,7 +23,7 @@ export function Credits({back}:{back:()=>void}){
           <li><CreditLink href={license+'manrope.txt'}>Manrope Project Authors</CreditLink> · SIL Open Font License 1.1</li>
           <li><CreditLink href={license+'react.txt'}>React and React DOM</CreditLink> · MIT</li>
           <li><CreditLink href={license+'three.txt'}>Three.js</CreditLink> · MIT</li>
-          <li><CreditLink href="https://developers.google.com/youtube/iframe_api_reference">YouTube</CreditLink> · Thar Radio playlist playback. Music belongs to its respective rights holders.</li>
+          <li>Thar Soundtrack · Recordings performed by Jalal Chandio and Fozia Soomro.</li>
           <li><CreditLink href="https://commons.wikimedia.org/wiki/File:Desert_Hamlets_Tharparkar.jpg">Tharparkar hamlets</CreditLink>, <CreditLink href="https://commons.wikimedia.org/wiki/File:Road_towards_THARPARKAR.jpg">road</CreditLink>, and <CreditLink href="https://commons.wikimedia.org/wiki/Category:Prosopis_cineraria">plant photographs</CreditLink> informed the original models. Reference photos are not bundled.</li>
         </ul>
       </details>

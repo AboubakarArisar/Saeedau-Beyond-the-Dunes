@@ -6,7 +6,7 @@ export function readSoundtrack(value:unknown):SoundtrackEntry[]{
   return value.map(entry=>{
     if(!entry||typeof entry.title!=='string'||!entry.title.trim()||
       typeof entry.artist!=='string'||!entry.artist.trim()||typeof entry.file!=='string'||
-      !/^[a-z\d][a-z\d._-]*\.(mp3|ogg|m4a|wav|opus)$/i.test(entry.file)||files.has(entry.file)){
+      !/^[a-z\d][a-z\d ._-]*\.(mp3|ogg|m4a|wav|opus)$/i.test(entry.file)||files.has(entry.file)){
       throw new Error('Invalid soundtrack entry');
     }
     files.add(entry.file);
