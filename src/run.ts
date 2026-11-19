@@ -1,4 +1,5 @@
-import {checkpoints, LENGTH, road, type Drive} from './driving';
+import {checkpoints, LENGTH, road, villageOrigin, type Drive} from './driving';
+import {villageJunction,villagePlaces} from './village';
 import type {Season} from './seasons';
 import type {Vehicle} from './driving';
 import {coinValue} from './coins';
@@ -10,7 +11,7 @@ export const modes={
   explorer:{name:'Desert Explorer',objective:'Visit roadside places and village compounds. Finish whenever you like.'},
 } as const;
 export type Mode=keyof typeof modes;
-export const places=[
+export const roadsidePlaces=[
   {name:'Umerkot tea stall',distance:31,offset:-15.5},
   {name:'Chhor market',distance:checkpoints[1]-32,offset:12.9},
   {name:'Jeelani Mor junction',distance:checkpoints[2],offset:-24},
@@ -19,16 +20,28 @@ export const places=[
   {name:'Pataho chounra compound',distance:checkpoints[5]+42,offset:18},
   {name:'Hingorao village trough',distance:checkpoints[6]+75,offset:18},
 ] as const;
+const villageDiscoveries=villagePlaces.map(({name,x,d,radius})=>{
+  const distance=LENGTH+villageJunction+d;
+  return {name,distance,offset:villageOrigin+x-road(distance),radius};
+});
+export const places=[...roadsidePlaces.map(place=>({...place,radius:7})),...villageDiscoveries];
+const homecomingStops=[villageDiscoveries[0],villageDiscoveries[4],villageDiscoveries[5]];
 export const stageTime=(leg:number)=>[76,69,72,74,70,73,67][leg]??0;
 export type Run=ReturnType<typeof newRun>;
 export function newRun(mode:Mode){
   return {mode,seconds:0,countdown:mode==='race'?3:0,remaining:stageTime(0),offRoad:0,impacts:0,crashes:0,
-    progress:0,leg:0,discoveries:0,coins:0,outcome:null as 'finished'|'timeout'|null};
+    progress:0,leg:0,discoveries:0,coins:0,villageStage:0,outcome:null as 'finished'|'timeout'|null};
 }
+function distanceTo(car:Pick<Drive,'position'|'lateral'>,place:typeof places[number]){
+  return Math.hypot(car.position-place.distance,car.lateral-road(place.distance)-place.offset);
+}
+export const homecomingTarget=(run:Run)=>homecomingStops[run.villageStage]?.name;
 export function discover(run:Run,car:Drive){
+  const stop=homecomingStops[run.villageStage];
+  if(run.mode==='journey'&&run.leg===7&&stop&&distanceTo(car,stop)<=stop.radius)run.villageStage++;
   if(run.mode!=='explorer')return;
-  places.forEach(({distance,offset},index)=>{
-    if(Math.hypot(car.position-distance,car.lateral-road(distance)-offset)<=7)run.discoveries|=1<<index;
+  places.forEach((place,index)=>{
+    if(distanceTo(car,place)<=place.radius)run.discoveries|=1<<index;
   });
 }
 export const discoveries=(mask:number)=>places.filter((_,index)=>mask&(1<<index));
@@ -36,7 +49,7 @@ export function checkpoint(run:Run,leg:number){
   if(leg!==run.leg+1||leg>=checkpoints.length)return;
   run.leg=leg;
   if(leg===checkpoints.length-1){
-    if(run.mode!=='explorer')run.outcome='finished';
+    if(run.mode==='race'||run.mode==='challenge')run.outcome='finished';
   }else if(run.mode==='challenge'){
     run.remaining=Math.min(14,run.remaining)+stageTime(leg);
   }

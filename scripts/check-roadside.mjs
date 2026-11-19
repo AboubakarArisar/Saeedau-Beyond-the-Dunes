@@ -107,7 +107,7 @@ try{
 
   for(const [index,mode] of ['Free Journey','Speed Racing','Checkpoint Challenge','Desert Explorer'].entries()){
     await begin({distance:27},mode,['jeep','kekro','unique','jeep'][index]);
-    await expect(count()).toHaveText('Coins 0');
+    await expect(count()).toHaveAttribute('aria-label','Coins 0');
     await page.keyboard.down('w');
     try{
       await expect.poll(async()=>(await state()).coins,{timeout:24000}).toBeGreaterThan(0);
@@ -117,14 +117,14 @@ try{
     finally{await page.keyboard.up('Space');}
     const stopped=await state();
     expect(stopped.leg).toBe(0);
-    await expect(count()).toHaveText('Coins '+stopped.coins);
+    await expect(count()).toHaveAttribute('aria-label','Coins '+stopped.coins);
     await expect.poll(()=>page.evaluate(()=>window.pickupSounds??0)).toBeGreaterThan(0);
     await page.waitForTimeout(400);
     expect((await state()).coins).toBe(stopped.coins);
     if(index===0){
       await shot('coin-hud');
       await page.keyboard.press('r');
-      await expect(count()).toHaveText('Coins 0');
+      await expect(count()).toHaveAttribute('aria-label','Coins 0');
     }
     if(mode==='Desert Explorer'){
       await button('Pause').click();await button('Finish expedition').click();

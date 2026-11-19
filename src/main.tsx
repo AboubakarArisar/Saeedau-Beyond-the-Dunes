@@ -8,11 +8,12 @@ import {Credits} from './Credits';
 import {RotateScreen,TouchDrive,touchDevice,useMedia,type DriveAction} from './TouchDrive';
 import type {Season} from './seasons';
 import {Garage,JourneySetup} from './JourneyMenus';
-import {discoveries,modes,newRun,places,raceTime,record,recordKey,score,type Mode,type Records,type Run} from './run';
+import {discoveries,homecomingTarget,modes,newRun,places,raceTime,record,recordKey,score,type Mode,type Records,type Run} from './run';
 import '@fontsource-variable/manrope';
 import './style.css';
 import './title.css';
 import './hud.css';
+import {coinValue} from './coins';
 
 const time=(seconds:number)=>{
  const tenths=Math.floor(seconds*10);
@@ -24,6 +25,9 @@ function App(){
  const previewFrame=useRef<HTMLDivElement>(null);
  const [menu,setMenu]=useState('home');
  const [stats,setStats]=useState([0,0]);
+ const [coinCount,setCoinCount]=useState(0);
+ const [coinAward,setCoinAward]=useState(0);
+ const displayedCoins=useRef(0);
  const [failed,setFailed]=useState(false);
  const [vehicleAssets,setVehicleAssets]=useState<Partial<Record<Vehicle,'ready'|'error'>>>({});
  const [vehicle,setVehicle]=useState<Vehicle>(()=>{
@@ -58,7 +62,12 @@ function App(){
  const motion=useRef<Motion>({speed:0,sand:false,throttle:false});
  const options=useRef({paused:true,shadows,vehicle,title:true,mobile,reducedMotion,touch:touch.current,reset:0,recenter,season,mode,preview:false,garage:false,finish:false,previewFrame,previewAngle:0,previewZoom:0,
   vehicleLoad:(key:Vehicle,status:'ready'|'error')=>setVehicleAssets(previous=>({...previous,[key]:status})),
-  coinPickup:()=>sound.current?.pickup(),
+  coinPickup:(count:number)=>{
+   const delta=count-displayedCoins.current;
+   displayedCoins.current=count;
+   setCoinCount(count);setCoinAward(Math.max(0,delta)*coinValue);
+   if(delta>0)sound.current?.pickup();
+  },
  });
  options.current.paused=menu!==''||rotate;
  options.current.shadows=shadows;
@@ -114,7 +123,7 @@ function App(){
   if(leg<previous)announcedOrigin.current=false;
  },[leg]);
  useEffect(()=>{
-  if(!announcement||leg===stops.length-1)return;
+  if(!announcement)return;
   const timer=window.setTimeout(()=>setAnnouncement(''),3500);
   return ()=>clearTimeout(timer);
  },[announcement,leg]);
@@ -150,6 +159,7 @@ function App(){
   announcedOrigin.current=false;
   previousLeg.current=0;
   options.current.finish=false;
+  displayedCoins.current=0;setCoinCount(0);setCoinAward(0);
   touch.current.clear();
   options.current.reset++;
   setRun(newRun(mode));setStats([0,0]);setLeg(0);setRemaining(checkpoints[1]);
@@ -191,7 +201,7 @@ function App(){
     back={()=>setMenu('home')} garage={()=>{garageBack.current='setup';setMenu('garage');}} start={startRun}/>:
    menu==='garage'?<Garage {...preview} back={()=>setMenu(garageBack.current)}/>:menu==='results'?<section className="panel run-panel results-panel">
    <small>{modes[run.mode].name}</small>
-   <h1>{run.outcome==='timeout'?'Time expired':run.leg===7?'Welcome to Saeedau':'Expedition complete'}</h1>
+   <h1>{run.outcome==='timeout'?'Time expired':run.villageStage===3?'Homecoming complete':run.leg===7?'Welcome to Saeedau':'Expedition complete'}</h1>
    <p><strong>{scored.total.toLocaleString()} points</strong>{best&&<> · Personal best {best.score.toLocaleString()}</>}</p>
    <p>{run.coins} {run.coins===1?'coin':'coins'} · {scored.breakdown.Coins} coin points{best?.coins!==undefined&&<> · Best {best.coins}</>}</p>
    {run.mode==='race'&&<p>Adjusted time {time(raceTime(run))} · Driving time {time(run.seconds)}{best?.time!==undefined&&<> · Personal best {time(best.time)}</>}</p>}
@@ -224,14 +234,14 @@ function App(){
    </fieldset>}
    {menu==='pause'&&run.mode==='explorer'&&<details open><summary>Discoveries · {found.length} / {places.length}</summary><ul>{places.map(place=><li key={place.name}>{found.includes(place)?'✓ ':''}{place.name}</li>)}</ul></details>}
    <nav>{menu==='pause'?<><button onClick={enter}>Resume</button><button onClick={()=>{if(window.confirm('Restart this run?'))startRun();}}>Restart</button><button onClick={()=>{settingsBack.current='pause';setMenu('settings');}}>Settings</button>
-    {run.mode==='explorer'&&<button onClick={()=>{options.current.finish=true;}}>Finish expedition</button>}<button onClick={exitRun}>Main menu</button></>:<button onClick={()=>setMenu(settingsBack.current)}>Back</button>}</nav>
+    {run.mode==='explorer'&&<button onClick={()=>{options.current.finish=true;}}>Finish expedition</button>}
+    {run.mode==='journey'&&run.leg===7&&<button onClick={()=>{options.current.finish=true;}}>Finish journey</button>}<button onClick={exitRun}>Main menu</button></>:<button onClick={()=>setMenu(settingsBack.current)}>Back</button>}</nav>
   </section>:<>
    <aside className="hud" aria-label="Driving dashboard">
     <div className="hud-speed"><strong>{stats[0]}</strong><span>km/h</span></div>
     <small className="hud-vehicle">{vehicles[vehicle].name}</small>
     <div className="hud-route">
      <span>{modes[run.mode].name} · {scored.total} pts</span>
-     <span className="hud-coins"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="#e9ad4c" stroke="#ffe498"/><path d="M5.7 12.1 8.4 8l2 1.9 1.7-2.9 2.3 5.1" fill="none" stroke="#704316" strokeLinecap="round" strokeLinejoin="round"/></svg>Coins {run.coins}</span>
      {run.mode==='race'&&<span className="hud-distance">{run.countdown>0?'Starting in '+Math.ceil(run.countdown):time(raceTime(run))}</span>}
      {run.mode==='challenge'&&<span className="hud-distance">{time(run.remaining)} remaining</span>}
      {run.mode==='explorer'?<>
@@ -239,14 +249,25 @@ function App(){
       <span className="hud-distance">{nextDiscovery?.name??'All locations discovered'}</span>
      </>:<>
      <span className={leg===stops.length-1?'arrival-label':undefined}>{leg===stops.length-1?'Arrived in Saeedau':`${stops[leg]} → ${stops[leg+1]}`}</span>
-     <span className="hud-distance">{leg===stops.length-1?'Journey complete':`${remaining>=1000?(remaining/1000).toFixed(1)+' km':remaining+' m'} to ${stops[leg+1]}`}</span>
+     <span className="hud-distance">{leg===stops.length-1?(homecomingTarget(run)??'Markan Faqeer House reached'):
+      `${remaining>=1000?(remaining/1000).toFixed(1)+' km':remaining+' m'} to ${stops[leg+1]}`}</span>
+     {leg===7&&<span className="hud-distance">{['Continue beyond the welcome gate','Go right at the junction','Use the village stopping area','Finish the journey from Pause'][run.villageStage]}</span>}
      <div className="hud-progress"><progress aria-label="Journey progress" value={stats[1]} max="100"/><span>{stats[1]}%</span></div>
      </>}
     </div>
    </aside>
+   <div className="hud-coins" aria-live="polite" aria-label={`Coins ${coinCount}`}>
+    <svg viewBox="0 0 32 32" width="25" height="25" aria-hidden="true">
+     <circle cx="16" cy="16" r="13" fill="#dfa644" stroke="#ffda83" strokeWidth="2"/>
+     <circle cx="16" cy="16" r="10.5" fill="#f3c464" stroke="#b47522"/>
+     <path d="M8 20q4-10 8-5 4-7 8 4m-16 1q5-5 8-3 4-4 8 2" fill="none" stroke="#8f561a" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+    <span key={coinCount} className={coinAward?'coin-digits coin-digits-pickup':'coin-digits'} aria-hidden="true">{String(coinCount).padStart(3,'0')}</span>
+    {coinAward>0&&<span key={'award-'+coinCount} className="coin-award" aria-hidden="true">+{coinAward}</span>}
+   </div>
    <button className="pause" onClick={()=>setMenu('pause')}>Pause</button>
    {run.countdown>0&&<div className="race-countdown" role="status">{Math.ceil(run.countdown)}</div>}
-   {announcement&&<aside className="checkpoint-toast" role="status"><small>{leg===stops.length-1?'Journey complete':leg===0?'Journey begins':'Checkpoint reached'}</small>{announcement}</aside>}
+   {announcement&&<aside className="checkpoint-toast" role="status"><small>{leg===stops.length-1?'Saeedau arrival':leg===0?'Journey begins':'Checkpoint reached'}</small>{announcement}</aside>}
    {mobile?<TouchDrive inputs={touch.current} reset={()=>{touch.current.clear();options.current.reset++;}}/>:
     <aside className="drive-help"><button aria-expanded={controls} onClick={()=>setControls(!controls)}>{controls?'Hide controls':'Controls'}</button>
       {controls&&<p>WASD or arrows to drive · Space handbrake · Drag to orbit · Scroll to zoom · R reset · Esc pause</p>}

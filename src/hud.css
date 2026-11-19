@@ -5,7 +5,15 @@
 .hud small.hud-vehicle{letter-spacing:0;color:#fff5df;margin:4px 0 8px;padding:2px 8px;border-radius:3px;background:#171716ed;width:max-content}
 .hud-route{display:grid;gap:2px;padding:8px 12px;border-radius:4px 12px 12px 12px;background:#171716ed;font-size:.875rem;font-weight:800}
 .hud-distance{color:#ffd2a0;font-weight:650}
-.hud-coins{display:flex;align-items:center;gap:5px;color:#ffe1a2;font-size:.75rem;font-weight:750;letter-spacing:.03em;text-transform:uppercase}
+.hud-coins{position:absolute;z-index:2;top:max(12px,env(safe-area-inset-top));left:50%;translate:-50%;
+ display:flex;align-items:center;gap:8px;padding:6px 13px;border-radius:99px;background:#171716d9;
+ color:#ffdf8d;font-weight:850;line-height:1;font-size:clamp(1.25rem,2.8vw,1.75rem);font-variant-numeric:tabular-nums;
+ box-shadow:0 2px 10px #0005;border:1px solid #f4c76c59;pointer-events:none}
+.coin-digits{min-width:3ch;text-align:center}
+.coin-digits-pickup{animation:coin-tick .25s cubic-bezier(.2,.9,.4,1) both}
+.coin-award{position:absolute;top:100%;left:50%;font-size:.88rem;animation:coin-award .7s ease-out both}
+@keyframes coin-tick{from{transform:translateY(5px) scale(.93);opacity:.7}to{transform:none;opacity:1}}
+@keyframes coin-award{0%{transform:translate(-50%,7px);opacity:1}72%{opacity:1}100%{transform:translate(-50%,24px);opacity:0}}
 .hud-progress{display:flex;align-items:center;gap:8px}
 .hud-progress progress{height:5px;flex:1;min-width:56px}
 .pause,.touch-layout .pause{background:#171716ed;border-color:#fff5df66;border-radius:8px;font-size:.875rem}
@@ -15,7 +23,17 @@
 .touch-layout .hud-speed{padding:4px 8px}
 .touch-layout .hud-speed strong{font-size:1.5rem}
 .touch-layout .hud-route{font-size:.75rem;padding:4px 8px}
-.checkpoint-toast{position:absolute;top:max(16px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:48%;padding:8px 16px;border-radius:8px;background:#171716ed;color:#fff5df;text-align:center;font-size:clamp(1rem,2.5vw,1.75rem);font-weight:800;line-height:1.2;pointer-events:none}
+.checkpoint-toast{position:absolute;top:calc(max(12px,env(safe-area-inset-top)) + 72px);left:50%;transform:translateX(-50%);max-width:48%;padding:8px 16px;border-radius:8px;background:#171716ed;color:#fff5df;text-align:center;font-size:clamp(1rem,2.5vw,1.75rem);font-weight:800;line-height:1.2;pointer-events:none}
+.touch-layout .hud-coins{top:max(8px,env(safe-area-inset-top));padding:5px 9px;font-size:1.2rem}
+.touch-layout .hud-coins svg{width:20px;height:20px}
+@media(max-width:560px){
+ .touch-layout .checkpoint-toast{top:max(166px,calc(env(safe-area-inset-top) + 145px))}
+}
+@media(prefers-reduced-motion:reduce){
+ .coin-digits-pickup{animation:none}
+ .coin-award{animation:coin-award-reduced .7s linear both}
+}
+@keyframes coin-award-reduced{from{transform:translate(-50%,5px);opacity:1}to{transform:translate(-50%,5px);opacity:0}}
 .checkpoint-toast small{display:block;color:#ffd2a0;font-size:.75rem}
 .run-panel{max-height:calc(100dvh - 2rem);bottom:clamp(1rem,6vh,4rem);overflow:auto;border-radius:12px}
 .run-panel h1{font-size:clamp(1.8rem,5vw,3.2rem);margin:.35em 0 .65em}

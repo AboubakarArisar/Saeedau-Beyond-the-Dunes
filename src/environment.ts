@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {ground,checkpoints,development,road} from './driving';
+import {ground,checkpoints,development,road,LENGTH,villageOrigin} from './driving';
+import {villageJunction} from './village';
 import {Colliders} from './collision';
 
 export async function loadEnvironment(){
@@ -80,7 +81,8 @@ export function decorate(group:T.Group, assets:Environment, from:number, to:numb
     if(Math.abs(offset)<19&&random()<development(distance)*.7)continue;
     if(Math.abs(offset)>35&&Math.sin(distance*.051+offset*.15)>.46)continue;
     const kind=index<22?(index%3?'Kandi':'Khumbat'):(index%3?'Khimp':'Karir');
-    place(kind+index%3,distance,offset,(index<22?.61:.36)+random()*.62,random()*Math.PI*2);
+    const size=(index<22?.61:.36)+random()*.62,angle=random()*Math.PI*2;
+    if(distance<LENGTH+42)place(kind+index%3,distance,offset,size,angle);
   }
   checkpoints.forEach((anchor,index)=>{
     if(anchor+100<from||anchor-90>=to)return;
@@ -125,6 +127,16 @@ export function decorate(group:T.Group, assets:Environment, from:number, to:numb
       place('Wall',anchor+28,-10,1,.55,true);
     }
   });
+  for(const [name,x,d,size] of [
+    ['Kandi0',-131,79,1.15],['Kandi1',-151,109,1.24],['Kandi2',-182,89,1.2],
+    ['Kandi0',101,131,1.13],['Kandi1',127,113,1.14],['Kandi2',123,80,1],
+    ['Karir0',37,83,.72],['Khimp1',77,113,.82],['Karir2',-97,78,.81],
+    ['Charpai',113.9,117,.9],['Charpai',131,112,.95],['ClayPot',110.9,117.7,.78],
+    ['ClayPot',130,117,.8],['ClayPot',119,81,.8],
+  ] as const){
+    const distance=LENGTH+villageJunction+d;
+    place(name,distance,villageOrigin+x-road(distance),size,.35,true);
+  }
   const wires:number[]=[];
   for(let distance=Math.max(12,12+Math.ceil((from-12)/44)*44);distance<Math.min(2980,to);distance+=44){
     const offset=-8.9;

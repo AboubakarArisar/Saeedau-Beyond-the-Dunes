@@ -125,6 +125,10 @@ try {
     }
     await button('Start '+mode).click();
     if(mode==='Desert Explorer'){await button('Pause').click();await button('Finish expedition').click();}
+    if(mode==='Free Journey'){
+      await expect(page.locator('.hud-route')).toContainText('Arrived in Saeedau');
+      await button('Pause').click();await button('Finish journey').click();
+    }
     await expect(page.locator('.results-panel h1')).toHaveText(mode==='Checkpoint Challenge'?'Time expired':mode==='Desert Explorer'?'Expedition complete':'Welcome to Saeedau',{timeout:18000});
     if(mode==='Free Journey')await shot('arrival');
     if(mode==='Speed Racing'){

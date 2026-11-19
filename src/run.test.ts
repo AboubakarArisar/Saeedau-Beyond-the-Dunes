@@ -42,11 +42,12 @@ describe('game modes and leaderboard',()=>{
     expect(score(run).breakdown['Explorer objective']).toBe(300);
   });
 
-  it('completes free journeys without a timer or score target',()=>{
+  it('leaves Free Journey open after Saeedau for the optional homecoming',()=>{
     const run=newRun('journey');
     expect(tick(run,500)).toBe(true);
     for(let leg=1;leg<=7;leg++)checkpoint(run,leg);
-    expect(run.outcome).toBe('finished');
+    expect(run.outcome).toBeNull();
+    run.outcome='finished';
     expect(score(run).breakdown.Completion).toBe(400);
   });
 });

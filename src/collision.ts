@@ -85,3 +85,10 @@ export function moveThrough(vehicle:Footprint,dx:number,dz:number,grids:Iterable
   const slide=follow?Math.max(0,follow.time-.01):1;
   return {dx:dx*fraction+slideX*slide,dz:dz*fraction+slideZ*slide,impact:Math.abs(along)};
 }
+
+export function cameraTravel(x:number,z:number,dx:number,dz:number,grids:Iterable<Colliders>){
+  const nearby=new Set<Footprint>();
+  for(const grid of grids)grid.query(x,z,dx,dz,.4,nearby);
+  const hit=sweep({x,z,width:.36,length:.36,sin:0,cos:1},dx,dz,nearby);
+  return hit?Math.max(.025,hit.time-.3/Math.max(Math.hypot(dx,dz),.35)):1;
+}

@@ -4,10 +4,13 @@ import type {Motion} from './gameAudio';
 import type {DriveAction} from './TouchDrive';
 import {isControl} from './Radio';
 import {decorate,disposeEnvironment,loadEnvironment,type Environment} from './environment';
-import { LENGTH, ROAD_WIDTH, checkpoints, junction, stops, ground, road, paved, start, advance, visit, vehicles, chaseProfiles, dampHeading, type Vehicle } from './driving';
-import {Colliders,moveThrough} from './collision';
+import { LENGTH, ROAD_WIDTH, checkpoints, junction, stops, ground, road, paved, start, advance, visit, vehicles, chaseProfiles, dampHeading, villageLimit,villageOrigin,type Vehicle } from './driving';
+import {cameraTravel,Colliders,moveThrough} from './collision';
 import {seasons,type Season} from './seasons';
-import {checkpoint,discover,newRun,places,tick,type Mode,type Run} from './run';
+import {checkpoint,discover,newRun,roadsidePlaces,tick,type Mode,type Run} from './run';
+import {villageJunction,villageWidth} from './village';
+import {buildVillage} from './villageScene';
+import {rigRider} from './rider';
 import {createGuardrails} from './guardrails';
 import {collectCoins,coinsBetween,type Coin} from './coins';
 import {createCoinField} from './coinField';
@@ -17,7 +20,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   touch:Map<number,DriveAction>;reset:number;recenter:boolean;season:Season;mode:Mode;preview:boolean;finish:boolean;
   garage:boolean;previewFrame:{current:HTMLDivElement|null};previewAngle:number;previewZoom:number;
   vehicleLoad:(vehicle:Vehicle,status:'ready'|'error')=>void;
-  coinPickup:()=>void;
+  coinPickup:(count:number)=>void;
 }) {
   const scene = new T.Scene(); scene.fog = new T.FogExp2('#d1cdbd', .0022);
   const renderer = new T.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(1.5, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; host.append(renderer.domElement);
@@ -31,7 +34,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   const previewProfiles={
     kekro:{radius:3.36,target:1.56,angle:2.35},
     jeep:{radius:2.27,target:1.02,angle:2.22},
-    unique:{radius:1.24,target:.59,angle:2.08},
+    unique:{radius:1.37,target:.78,angle:2.08},
   };
   const previewAngles={journey:2.17,race:2.48,challenge:1.94,explorer:1.66};
   const contact=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShaderMaterial({
@@ -130,7 +133,8 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     const group=new T.Group(),from=segment*span,to=from+span;
     const colliders=new Colliders();
     collisionChunks.set(segment,colliders);
-    const terrain=new T.PlaneGeometry(440,span,110,80);terrain.rotateX(-Math.PI/2);terrain.translate(0,0,-from-span/2);
+    const expanded=to>LENGTH,terrain=new T.PlaneGeometry(expanded?540:440,span,expanded?135:110,80);
+    terrain.rotateX(-Math.PI/2);terrain.translate(0,0,-from-span/2);
     const points=terrain.attributes.position;
     const tint=new Float32Array(points.count*3);
     const sandTone=new T.Color('#cbb18a'),earthTone=new T.Color('#a98d68'),greenTone=new T.Color('#999373'),color=new T.Color();
@@ -180,8 +184,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         for(let index=0;index<=count;index++){
           const distance=begin+(end-begin)*index/count,base=vertices.length/3;
           for(const side of [-1,1]){
-            const taper=1-T.MathUtils.smoothstep(distance,LENGTH+22,LENGTH+72);
-            const lateral=road(distance)+(offset+side*width/2)*taper;
+            const lateral=road(distance)+offset+side*width/2;
             const elevation=width<1?.103:width===ROAD_WIDTH?.075:.015;
             vertices.push(lateral,ground(lateral,distance)+elevation,-distance);
           }
@@ -197,8 +200,8 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       }
       if(width>=1)textureSurface(item,width===ROAD_WIDTH?asphalt:sand,width===ROAD_WIDTH?2.7:5.8);
     }
-    if(from>=0&&from<LENGTH+72){
-      const end=Math.min(to,LENGTH+72),range=[[from,end]];
+    if(from>=0&&from<LENGTH+villageJunction){
+      const end=Math.min(to,LENGTH+villageJunction),range=[[from,end]];
       const leftEdge=from<=junction&&junction<end?[[from,junction-4],[junction+4,end]]:range;
       strip(-6.13,2,'#ac875f',leftEdge);strip(6.13,2,'#ac875f',range);
       strip(0,ROAD_WIDTH,'#5f5b56',range);strip(-4.94,.13,'#ddbc6c',leftEdge);strip(4.94,.13,'#ddbc6c',range);
@@ -215,7 +218,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         colliders.add({x,z:-d,width:1.37,length:.95,sin:0,cos:1});
       }
     }
-    function roadsideSign(distance:number,offset:number,heading:string,lines:string[],width=6.2,gateway=false){
+    function roadsideSign(distance:number,offset:number,heading:string,lines:string[],width=6.2,gateway=false,angle=0){
       if(distance<from||distance>=to)return;
       const lateral=road(distance)+offset,elevation=ground(lateral,distance),height=lines.length>1?2.15:1.65;
       const board=document.createElement('canvas');board.width=768;board.height=lines.length>1?272:208;
@@ -229,19 +232,21 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         lines.forEach((line,index)=>context.fillText(line,384,lines.length===1?127:110+index*60,690));
         const texture=new T.CanvasTexture(board);texture.colorSpace=T.SRGBColorSpace;
         const sign=new T.Mesh(new T.BoxGeometry(width,height,.09),new T.MeshBasicMaterial({map:texture}));
-        sign.position.set(lateral,elevation+(gateway?5.2:2.7),-distance);group.add(sign);
+        sign.position.set(lateral,elevation+(gateway?5.2:2.7),-distance);sign.rotation.y=angle;group.add(sign);
       }
       for(const post of [-1,1]){
-        const x=lateral+post*width*(gateway?.47:.37),z=-distance-.13;
+        const across=post*width*(gateway?.47:.37);
+        const x=lateral+across*Math.cos(angle)-.13*Math.sin(angle);
+        const z=-distance-across*Math.sin(angle)-.13*Math.cos(angle);
         const thickness=gateway?.66:.13,postHeight=gateway?4.55:3;
-        mesh(new T.BoxGeometry(thickness,postHeight,thickness),gateway?'#a87555':'#66635a',group).position.set(x,ground(x,distance)+postHeight/2-.1,z);
+        mesh(new T.BoxGeometry(thickness,postHeight,thickness),gateway?'#a87555':'#66635a',group).position.set(x,ground(x,-z)+postHeight/2-.1,z);
         colliders.add({x,z,width:thickness/2,length:thickness/2,sin:0,cos:1});
       }
     }
     stops.forEach((name,index)=>roadsideSign(index===0?42:index===7?LENGTH-19:checkpoints[index]-12,
       index===7?0:9,'WELCOME TO',[name.toUpperCase()],index===7?15.8:6.2,index===7));
     roadsideSign(junction-3,-10,'JEELANI MOR JUNCTION',['← Khipro      ↑ Saeedau','Chhor ↓'],8.7);
-    for(const place of places){
+    for(const place of roadsidePlaces){
       if(place.distance<from||place.distance>=to||place.distance===junction)continue;
       const side=Math.sign(place.offset),track=mesh(new T.PlaneGeometry(Math.abs(place.offset)-6.4,3.25,14,3),'#b09976',group);
       track.geometry.rotateX(-Math.PI/2);
@@ -262,6 +267,14 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       item.userData.land='road';item.material.roughness=seasons[options.season].roughness;
       textureSurface(item,asphalt,2.7);
     }
+    const villageStart=LENGTH+villageJunction;
+    if(villageStart>=from&&villageStart<to){
+      const season=seasons[options.season];
+      buildVillage(group,colliders,(x,d,heading,lines,width,angle)=>{
+        const distance=villageStart+d;
+        roadsideSign(distance,villageOrigin+x-road(distance),heading,lines,width,false,angle);
+      },season.road,season.roughness,(surface,paved)=>textureSurface(surface,paved?asphalt:sand,paved?2.7:5.8));
+    }
     scene.add(group);chunks.set(segment,group);
   }
   let previousSegment=Infinity;
@@ -281,7 +294,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   box(1.35,.07,.08,'#222526',0,1.86,-.43);box(1.35,.07,.08,'#222526',0,1.81,.44);const glass=box(1.27,.49,.04,'#8dabb2',0,1.57,-.43);(glass.material as T.MeshStandardMaterial).transparent=true;(glass.material as T.MeshStandardMaterial).opacity=.48;glass.castShadow=false;
   const wheels:T.Mesh[]=[]; for(const x of [-.85,.85])for(const z of [-1.13,1.12]) {const tire=mesh(new T.CylinderGeometry(.39,.39,.24,20),'#242323',jeep);tire.geometry.rotateZ(Math.PI/2);tire.position.set(x,.41,z);tire.castShadow=true;wheels.push(tire);const hub=mesh(new T.CylinderGeometry(.19,.19,.252,12),'#9f9b8e',tire);hub.rotation.z=Math.PI/2;}
   const spare=mesh(new T.CylinderGeometry(.33,.33,.19,20),'#282727',jeep);spare.rotation.x=Math.PI/2;spare.position.set(.35,1.02,1.86);
-  type VehicleModel={model:T.Group;tires:T.Object3D[];steerAxles:T.Object3D[]};
+  type VehicleModel={model:T.Group;tires:T.Object3D[];steerAxles:T.Object3D[];poseRider?:ReturnType<typeof rigRider>};
   const fleet:Record<Vehicle,VehicleModel>={
     jeep:{model:jeep,tires:wheels,steerAxles:[]},
     kekro:{model:new T.Group(),tires:[],steerAxles:[]},
@@ -291,7 +304,12 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
   const loader=new GLTFLoader();
   const files={jeep:'long-chassis',kekro:'kekro',unique:'unique70'} as const;
   for(const vehicle of Object.keys(files) as Vehicle[]){
-    loader.load(import.meta.env.BASE_URL+'vehicles/'+files[vehicle]+'.glb',({scene:model})=>{
+    void loadVehicle(vehicle);
+  }
+  async function loadVehicle(vehicle:Vehicle){
+    let model:T.Group|undefined;
+    try{
+      model=(await loader.loadAsync(import.meta.env.BASE_URL+'vehicles/'+files[vehicle]+'.glb')).scene;
       if(disposed){dispose(model);return;}
       const tires:T.Object3D[]=[],steerAxles:T.Object3D[]=[];
       model.traverse(item=>{
@@ -303,17 +321,27 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
           item.receiveShadow=false;
         }
       });
+      let poseRider:VehicleModel['poseRider'];
+      if(vehicle==='unique'){
+        const {scene:rider}=await loader.loadAsync(import.meta.env.BASE_URL+'vehicles/unique70-rider.glb');
+        model.add(rider);
+        if(disposed){dispose(model);return;}
+        rider.traverse(item=>{if(item instanceof T.Mesh)item.castShadow=true;});
+        poseRider=rigRider(rider,steerAxles[0]);
+        poseRider(0,0,0,0,true);
+      }
       if(vehicle==='jeep'){scene.remove(jeep);dispose(jeep);}
       model.visible=false;
       scene.add(model);
-      fleet[vehicle]={model,tires,steerAxles};
+      fleet[vehicle]={model,tires,steerAxles,poseRider};
       options.vehicleLoad(vehicle,'ready');
       renderer.shadowMap.needsUpdate=true;
-    },undefined,error=>{
+    }catch(error){
+      if(model)dispose(model);
       if(disposed)return;
       options.vehicleLoad(vehicle,'error');
       console.error('Could not load the '+vehicles[vehicle].name+' model',error);
-    });
+    }
   }
   const dust=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:'#dab584',size:.28,transparent:true,opacity:.35,depthWrite:false}));const particles=new Float32Array(90);dust.geometry.setAttribute('position',new T.BufferAttribute(particles,3));scene.add(dust);
   const keys=new Set<string>();
@@ -408,6 +436,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     if(reset!==options.reset){
       reset=options.reset;car=start();run=newRun(options.mode);
       collectedCoins.clear();coinField.reset();
+      options.coinPickup(0);
       steering=0;lastImpact=-Infinity;first=true;orbit=zoom=0;release();
     }
     if(activeVehicle!==options.vehicle){activeVehicle=options.vehicle;car.speed=0;if(!options.preview)first=true;orbit=zoom=0;release();}
@@ -425,14 +454,16 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     const throttle=keys.has('KeyW')||keys.has('ArrowUp')||touch.includes('throttle');
     const reverse=keys.has('KeyS')||keys.has('ArrowDown')||touch.includes('reverse');
     const parked=options.title;
+    const initialSpeed=car.speed;
     let travelled=0;
-    if(options.finish&&run.mode==='explorer')run.outcome='finished';
+    if(options.finish&&(run.mode==='explorer'||(run.mode==='journey'&&run.leg===7)))run.outcome='finished';
     if(!options.paused&&!document.hidden&&!run.outcome){
       stream(car.position);
       const steps=Math.max(1,Math.ceil(dt*75)),stepTime=dt/steps,profile=vehicles[activeVehicle];
       const input={throttle,reverse,steer,brake:keys.has('Space')||touch.includes('brake')};
       const onPickup=(coin:Coin)=>coinField.pickup(coin,now/1000);
       const beforeCoins=run.coins;
+      const limit=run.leg===7&&(run.mode==='journey'||run.mode==='explorer')?villageLimit:LENGTH;
       for(let step=0;step<steps;step++){
         const clock=resumed?stepTime:elapsed/1000/steps;
         if(!tick(run,run.countdown>0?stepTime:clock)){
@@ -441,12 +472,13 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         }
         steering=T.MathUtils.damp(steering,steer,12,stepTime);
         const {position,lateral}=car;
-        advance(car,stepTime,{...input,steer:steering},activeVehicle,season.grip);
+        advance(car,stepTime,{...input,steer:steering},activeVehicle,season.grip,limit);
         const sin=Math.sin(car.heading),cos=Math.cos(car.heading);
         const movement=moveThrough({x:lateral+sin*profile.center,z:-position-cos*profile.center,
           width:profile.width,length:profile.length,sin:-sin,cos},car.lateral-lateral,position-car.position,collisionChunks.values());
-        car.lateral=T.MathUtils.clamp(lateral+movement.dx,-110,110);
-        car.position=T.MathUtils.clamp(position-movement.dz,0,LENGTH);
+        const width=limit>LENGTH?villageWidth:110;
+        car.lateral=T.MathUtils.clamp(lateral+movement.dx,-width,width);
+        car.position=T.MathUtils.clamp(position-movement.dz,0,limit);
         travelled+=(car.lateral-lateral)*sin+(car.position-position)*cos;
         if(movement.impact>.0001){
           const impactSpeed=movement.impact/stepTime;
@@ -464,13 +496,13 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         discover(run,car);
         if(run.outcome)break;
       }
-      if(run.coins>beforeCoins)options.coinPickup();
+      if(run.coins>beforeCoins)options.coinPickup(run.coins);
     }
     const shown=parked?displayCar:options.preview?previewCar:car;
     stream(shown.position);
     coinField.update(shown.position,now/1000,!parked&&!options.preview,options.reducedMotion,collectedCoins,blockedCoins);
     const visibleVehicle=parked?'jeep':activeVehicle;
-    const {model,tires,steerAxles}=fleet[visibleVehicle];
+    const {model,tires,steerAxles,poseRider}=fleet[visibleVehicle];
     for(const entry of Object.values(fleet))entry.model.visible=entry.model===model;
     const y=ground(shown.lateral,shown.position);
     const detailed=visibleVehicle!=='jeep';
@@ -480,6 +512,8 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
     model.position.set(shown.lateral,y+(detailed&&paved(shown.lateral,shown.position)?.075:0),-shown.position);
     model.rotation.set(pitch,-shown.heading,visibleVehicle==='unique'&&!options.paused?-steering*Math.min(.31,Math.abs(car.speed)*.023):0,'YXZ');
     for(const axle of steerAxles)axle.rotation.y=options.preview?0:-steering*(visibleVehicle==='unique'?.45:.36);
+    poseRider?.(dt,now/1000,options.paused?0:(Math.abs(car.speed)-Math.abs(initialSpeed))/Math.max(dt,.001),
+      options.paused?0:steering,options.reducedMotion);
     for(const tire of tires)tire.rotation.x=(tire.rotation.x-travelled/vehicles[visibleVehicle].radius)%(2*Math.PI);
     if(parked){
       const drift=options.reducedMotion||options.mobile?0:Math.sin(now*.00025)*.14;
@@ -510,7 +544,7 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
         -shown.position+Math.cos(showroomAngle)*framed);
       previewCamera.lookAt(shown.lateral,y+profile.target,-shown.position);
       first=false;
-    }else if(run.outcome==='finished'&&run.leg===stops.length-1){
+    }else if(run.outcome==='finished'&&run.leg===stops.length-1&&car.position<=LENGTH+37){
       const distance=LENGTH-33,x=road(distance)-2.7;
       camera.position.set(x,ground(x,distance)+3.2,-distance);
       camera.lookAt(road(LENGTH-19),ground(road(LENGTH-19),LENGTH-19)+3.45,-(LENGTH-19));
@@ -520,7 +554,10 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       }
       followHeading=first?car.heading:dampHeading(followHeading,car.heading,cameraDt);
       const angle=followHeading+orbit,forwardX=Math.sin(angle),forwardZ=-Math.cos(angle);
-      const profile=chaseProfiles[activeVehicle],distance=Math.max(profile.min,profile.distance+zoom);
+      const profile=chaseProfiles[activeVehicle],desiredDistance=Math.max(profile.min,profile.distance+zoom);
+      const clearanceFraction=car.position>LENGTH?
+        cameraTravel(car.lateral,-car.position,-forwardX*desiredDistance,-forwardZ*desiredDistance,collisionChunks.values()):1;
+      const distance=desiredDistance*clearanceFraction;
       const x=car.lateral-forwardX*distance,z=-car.position-forwardZ*distance;
       const targetY=y+profile.target;
       let clearance=ground(x,-z)+.85;
@@ -531,7 +568,8 @@ export function mount(host: HTMLElement, report: (speed:number, position:number,
       const height=Math.max(clearance,y+profile.height+(distance-profile.distance)*.22);
       followHeight=first?height:T.MathUtils.damp(followHeight,height,9,cameraDt);
       camera.position.set(x,Math.max(clearance,followHeight),z);
-      target.set(car.lateral+forwardX*3.1,targetY,-car.position+forwardZ*3.1);
+      const lookAhead=3.1*clearanceFraction;
+      target.set(car.lateral+forwardX*lookAhead,targetY,-car.position+forwardZ*lookAhead);
       camera.lookAt(target);first=false;
     }
     const view=parked?titleCamera:options.preview?previewCamera:camera;
